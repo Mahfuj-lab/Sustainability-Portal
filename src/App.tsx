@@ -5,7 +5,8 @@ import {
   ChevronDown, ChevronRight, Box, TrendingUp, Target, Globe, FileCheck, Scale, FolderOpen
 } from 'lucide-react';
 import InventoryManagement from './modules/InventoryManagement';
-import SettingsPanel, { THEMES, ThemeKey } from './modules/SettingsPanel';
+import SettingsPanel, { THEMES } from './modules/SettingsPanel';
+type ThemeKey = string;
 
 // ============================================================
 // FIRESTORE REST API (no SDK, native fetch)
@@ -366,7 +367,7 @@ const App: React.FC = () => {
     const [currentTheme, setCurrentTheme] = useState<ThemeKey>(() => {
     return (localStorage.getItem('portal_theme') as ThemeKey) || 'emerald';
   });
-  const themeConfig = THEMES[currentTheme] || THEMES.emerald;
+   const themeConfig = THEMES.find(t => t.id === currentTheme) || THEMES[0];
   
   const [activeModule, setActiveModule] = useState<string>('factory_profile_overview');
   const [expandedModules, setExpandedModules] = useState<string[]>(['factory_profile', 'inventory_mgmt']);
