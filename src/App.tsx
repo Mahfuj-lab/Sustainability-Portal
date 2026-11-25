@@ -11,7 +11,6 @@ const PROJECT_ID = "sustainability-portal-886cf";
 const API_KEY = "AIzaSyB6JNUFMjSOjD4Xr3-hMQ90MNurDN8URu0";
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
-// Firestore REST value converters
 const toFSValue = (v: any): any => {
   if (v === null || v === undefined) return { nullValue: null };
   if (typeof v === 'string') return { stringValue: v };
@@ -50,7 +49,6 @@ const toFSFields = (obj: any): any => {
   return fields;
 };
 
-// REST helpers
 const restGet = async (path: string) => {
   const r = await fetch(`${BASE}/${path}?key=${API_KEY}`);
   if (r.status === 404) return null;
@@ -102,7 +100,6 @@ const restPatch = async (collectionId: string, docId: string, data: any) => {
   return true;
 };
 
-// query by field equality (used for login)
 const restQuery = async (collectionId: string, filters: { field: string; value: string }[]) => {
   const r = await fetch(`${BASE}:runQuery?key=${API_KEY}`, {
     method: 'POST',
@@ -229,7 +226,6 @@ const rowEfficiency = (r: ProductionRow) => {
   return avail > 0 ? (prod/avail)*100 : 0;
 };
 
-// CSV builder (Excel-compatible)
 const buildCSV = (headers: string[], rows: (string | number)[][]): string => {
   const esc = (v: any) => {
     const s = String(v ?? '');
@@ -237,7 +233,7 @@ const buildCSV = (headers: string[], rows: (string | number)[][]): string => {
   };
   const lines = [headers.map(esc).join(',')];
   rows.forEach(r => lines.push(r.map(esc).join(',')));
-  return '\uFEFF' + lines.join('\r\n'); // BOM for Excel UTF-8
+  return '\uFEFF' + lines.join('\r\n');
 };
 const downloadCSV = (filename: string, csv: string) => {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -253,12 +249,20 @@ const downloadCSV = (filename: string, csv: string) => {
 // ============================================================
 const BrandLogo: React.FC<{ logoUrl?: string; size?: 'sm'|'lg' }> = ({ logoUrl, size='lg' }) => {
   const [err, setErr] = useState(false);
-  const cls = size === 'lg' ? 'w-16 h-16' : 'w-9 h-9';
-  if (logoUrl && !err) return <img src={logoUrl} alt="Logo" onError={() => setErr(true)} className={`${cls} object-contain rounded-lg`} />;
+  const cls = size === 'lg' ? 'h-16 w-auto' : 'h-10 w-auto';
+  
+  // If custom logo fails or isn't provided, fallback to static /epyllion.png
+  if (!logoUrl || err) {
+    return <img src="/epyllion.png" alt="Epyllion Logo" className={`${cls} object-contain`} />;
+  }
+  
   return (
-    <div className={`${cls} rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-md shadow-emerald-200`}>
-      <Leaf className="text-white" size={size === 'lg' ? 32 : 20} />
-    </div>
+    <img 
+      src={logoUrl} 
+      alt="Custom Logo" 
+      onError={() => setErr(true)} 
+      className={`${cls} object-contain`} 
+    />
   );
 };
 
@@ -314,7 +318,7 @@ const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void; logoUrl?: string
 
   return (
     <div className="min-h-screen bg-white flex flex-col relative">
-      {/* FIXED TOP-LEFT LOGO FOR LOGIN */}
+      {/* FIXED TOP-LEFT LOGO */}
       <div className="absolute top-4 left-6">
         <BrandLogo logoUrl={logoUrl} size="lg" />
       </div>
@@ -575,7 +579,6 @@ const App: React.FC = () => {
     };
   }, [energyRows, prodRows, factors]);
 
-  // EXCEL (CSV) EXPORT
   const [exportModule, setExportModule] = useState('purchase_electricity');
   const [exportCols, setExportCols] = useState<string[]>([]);
   const [exportDropOpen, setExportDropOpen] = useState(false);
@@ -601,7 +604,6 @@ const App: React.FC = () => {
     downloadCSV(`${factory}_${year}_${exportModule}.csv`, csv);
   };
 
-  // USER MGMT
   const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
   const [userLoading, setUserLoading] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
@@ -640,6 +642,16 @@ const App: React.FC = () => {
   useEffect(() => { setSettingsLogo(logoUrl); }, [logoUrl]);
   useEffect(() => { setSettingsFactors(factors); }, [factors]);
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setSettingsLogo(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const saveSettings = async () => {
     try {
       await restSet('settings', 'general', { logo_url: settingsLogo });
@@ -659,7 +671,7 @@ const App: React.FC = () => {
       {/* TOP BAR */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 relative">
         
-        {/* FIXED TOP-LEFT LOGO FOR DASHBOARD */}
+        {/* FIXED TOP-LEFT LOGO */}
         <div className="absolute top-1/2 -translate-y-1/2 left-6">
           <BrandLogo logoUrl={logoUrl} size="sm" />
         </div>
@@ -922,10 +934,32 @@ const App: React.FC = () => {
                 <div className="space-y-4">
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
                     <h2 className="text-sm font-bold text-gray-800 mb-3">General Settings</h2>
+                    
                     <label className="block text-xs font-semibold text-gray-600 mb-1">Logo URL</label>
-                    <input value={settingsLogo} onChange={e => setSettingsLogo(e.target.value)} disabled={!isSuper}
-                      placeholder="https://.../logo.png"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs disabled:bg-gray-50" />
+                    <textarea 
+                      value={settingsLogo} 
+                      onChange={e => setSettingsLogo(e.target.value)} 
+                      disabled={!isSuper}
+                      placeholder="https://.../logo.png or data:image/..."
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs disabled:bg-gray-50 mb-3 resize-y" 
+                    />
+                    
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Or Upload Custom Logo</label>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleFileUpload}
+                      disabled={!isSuper}
+                      className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 disabled:opacity-50" 
+                    />
+                    
+                    {settingsLogo && settingsLogo.startsWith('data:image') && (
+                      <div className="mt-3">
+                        <p className="text-[10px] text-gray-500 mb-1">Uploaded Logo Preview:</p>
+                        <img src={settingsLogo} alt="Preview" className="h-12 object-contain border border-gray-200 rounded p-1 bg-gray-50" />
+                      </div>
+                    )}
                   </div>
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
                     <h2 className="text-sm font-bold text-gray-800 mb-3">Emission Factors (kg CO2e)</h2>
