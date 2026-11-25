@@ -5,6 +5,7 @@ import {
   ChevronDown, ChevronRight, Box, TrendingUp, Target, Globe, FileCheck, Scale, FolderOpen
 } from 'lucide-react';
 import InventoryManagement from './modules/InventoryManagement';
+import SettingsPanel, { THEMES, ThemeKey } from './modules/SettingsPanel';
 
 // ============================================================
 // FIRESTORE REST API (no SDK, native fetch)
@@ -362,6 +363,10 @@ const App: React.FC = () => {
   const [factors, setFactors] = useState<EmissionFactors>(DEFAULT_FACTORS);
   const [factory, setFactory] = useState('EKWL');
   const [year, setYear] = useState(2027);
+    const [currentTheme, setCurrentTheme] = useState<ThemeKey>(() => {
+    return (localStorage.getItem('portal_theme') as ThemeKey) || 'emerald';
+  });
+  const themeConfig = THEMES[currentTheme] || THEMES.emerald;
   
   const [activeModule, setActiveModule] = useState<string>('factory_profile_overview');
   const [expandedModules, setExpandedModules] = useState<string[]>(['factory_profile', 'inventory_mgmt']);
@@ -599,8 +604,7 @@ const App: React.FC = () => {
   if (bootLoading) return <div className="min-h-screen flex items-center justify-center bg-white"><div className="animate-pulse text-emerald-600 text-sm">Loading...</div></div>;
   if (!user) return <LoginScreen onLogin={setUser} />;
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+  return (    <div className={`min-h-screen flex flex-col transition-colors duration-300 ${themeConfig.pageBg}`}>
       {/* HEADER */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="flex items-center justify-between px-4 py-3">
@@ -878,59 +882,16 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {activeModule === 'settings' && (
-            <div className="space-y-4">
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-                <h2 className="text-sm font-bold text-gray-800 mb-3">General Settings</h2>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Logo URL</label>
-                <textarea 
-                  value={settingsLogo} 
-                  onChange={e => setSettingsLogo(e.target.value)} 
-                  disabled={!isSuper}
-                  placeholder="https://.../logo.png or data:image/..."
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs disabled:bg-gray-50 mb-3 resize-y" 
-                />
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Or Upload Custom Logo</label>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleFileUpload}
-                  disabled={!isSuper}
-                  className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 disabled:opacity-50" 
-                />
-                {settingsLogo && settingsLogo.startsWith('data:image') && (
-                  <div className="mt-3">
-                    <p className="text-[10px] text-gray-500 mb-1">Uploaded Logo Preview:</p>
-                    <img src={settingsLogo} alt="Preview" className="h-12 object-contain border border-gray-200 rounded p-1 bg-gray-50" />
-                  </div>
-                )}
-              </div>
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-                <h2 className="text-sm font-bold text-gray-800 mb-3">Emission Factors (kg CO2e)</h2>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                  {([
-                    ['grid_electricity','Grid Electricity (kWh)'],
-                    ['natural_gas','Natural Gas (m³)'],
-                    ['diesel','Diesel (L)'],
-                    ['petrol_octane','Petrol/Octane (L)'],
-                    ['cng','CNG (m³)'],
-                  ] as [keyof EmissionFactors, string][]).map(([k, l]) => (
-                    <div key={k}>
-                      <label className="block text-[10px] font-semibold text-gray-600 mb-1">{l}</label>
-                      <input type="number" value={settingsFactors[k]} disabled={!isSuper}
-                        onChange={e => setSettingsFactors(prev => ({ ...prev, [k]: n(e.target.value) }))}
-                        className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs disabled:bg-gray-50" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {isSuper && (
-                <button onClick={saveSettings} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold">
-                  <Save size={14} /> Save Settings
-                </button>
-              )}
-            </div>
+                   {activeModule === 'settings' && (
+            <SettingsPanel
+              currentThemeId={currentTheme}
+              onThemeChange={(newTheme) => setCurrentTheme(newTheme as ThemeKey)}
+              settingsFactors={factors}
+              setSettingsFactors={setFactors}
+              isSuper={isSuper}
+              onSaveSettings={saveSettings}
+              n={n}
+            />
           )}
 
           {/* NEW INVENTORY MANAGEMENT COMPONENT */}
