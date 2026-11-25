@@ -315,7 +315,7 @@ const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void }> = ({ onLogin }
       <img 
         src="https://i.ibb.co/8nj060LX/epyllion.png" 
         alt="Epyllion Group" 
-        className="h-12 w-auto object-contain fixed top-5 left-6" 
+        className="h-24 w-auto object-contain fixed top-5 left-6" 
       />
 
       <div className="flex-1 flex items-center justify-center px-4 py-10 mt-10">
@@ -372,7 +372,7 @@ const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void }> = ({ onLogin }
         </div>
       </div>
       <footer className="text-center text-[11px] text-gray-400 py-5 border-t border-gray-100">
-        © 2027 Sustainability Portal • Designed &amp; Developed by Md. Mahfuj Rahman Rasel
+        © 2027 Sustainability Portal • Designed &amp; Developed by Md. Mahfuj Rahman Rasel| Support: +880 1705-472581
       </footer>
     </div>
   );
