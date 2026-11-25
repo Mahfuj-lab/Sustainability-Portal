@@ -607,7 +607,7 @@ const App: React.FC = () => {
 
   return (    <div className={`min-h-screen flex flex-col transition-colors duration-300 ${themeConfig.pageBg}`}>
       {/* HEADER */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+      <header className={`${themeConfig.headerBg} ${themeConfig.sidebarText} border-b sticky top-0 z-40 transition-colors duration-300`}>
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-500 hover:text-emerald-600"><Menu size={20} /></button>
@@ -654,7 +654,7 @@ const App: React.FC = () => {
       <div className="flex-1 flex overflow-hidden">
         {/* SIDEBAR */}
         {sidebarOpen && (
-          <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-[calc(100vh-61px)] overflow-y-auto hidden md:flex">
+          <aside className={`w-64 ${themeConfig.sidebarBg} ${themeConfig.sidebarText} border-r flex flex-col h-[calc(100vh-61px)] overflow-y-auto hidden md:flex transition-colors duration-300`}>
             <nav className="p-3 space-y-1 flex-1">
               {MODULES.map(m => {
                 const Icon = m.icon;
