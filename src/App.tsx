@@ -245,31 +245,24 @@ const downloadCSV = (filename: string, csv: string) => {
 };
 
 // ============================================================
-// BRAND LOGO
+// BRAND LOGO (For Dashboard Sidebar)
 // ============================================================
-const BrandLogo: React.FC<{ logoUrl?: string; size?: 'sm'|'lg' }> = ({ logoUrl, size='lg' }) => {
-  const [err, setErr] = useState(false);
-  const cls = size === 'lg' ? 'h-16 w-auto' : 'h-10 w-auto';
-  
-  // If custom logo fails or isn't provided, fallback to static /epyllion.png
-  if (!logoUrl || err) {
-    return <img src="/epyllion.png" alt="Epyllion Logo" className={`${cls} object-contain`} />;
-  }
-  
-  return (
-    <img 
-      src={logoUrl} 
-      alt="Custom Logo" 
-      onError={() => setErr(true)} 
-      className={`${cls} object-contain`} 
-    />
-  );
-};
+const SidebarLogo = () => (
+  <div className="flex items-center gap-2">
+    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-sm">
+      <Leaf className="text-white" size={18} />
+    </div>
+    <div>
+      <h1 className="text-sm font-bold text-gray-800 leading-tight">Sustainability</h1>
+      <p className="text-[10px] text-emerald-600 font-medium">Portal</p>
+    </div>
+  </div>
+);
 
 // ============================================================
 // LOGIN
 // ============================================================
-const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void; logoUrl?: string }> = ({ onLogin, logoUrl }) => {
+const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void }> = ({ onLogin }) => {
   const [mode, setMode] = useState<'signin'|'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -318,10 +311,12 @@ const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void; logoUrl?: string
 
   return (
     <div className="min-h-screen bg-white flex flex-col relative">
-      {/* FIXED TOP-LEFT LOGO */}
-      <div className="absolute top-4 left-6">
-        <BrandLogo logoUrl={logoUrl} size="lg" />
-      </div>
+      {/* HARDCODED FIXED TOP-LEFT LOGO */}
+      <img 
+        src="https://i.ibb.co/8nj060LX/epyllion.png" 
+        alt="Epyllion Group" 
+        className="h-12 w-auto object-contain fixed top-5 left-6" 
+      />
 
       <div className="flex-1 flex items-center justify-center px-4 py-10 mt-10">
         <div className="w-full max-w-md">
@@ -441,7 +436,6 @@ const DataTable: React.FC<DataTableProps> = ({ title, subtitle, rows, fields, ca
 const App: React.FC = () => {
   const [user, setUser] = useState<UserRecord | null>(null);
   const [bootLoading, setBootLoading] = useState(true);
-  const [logoUrl, setLogoUrl] = useState('');
   const [factors, setFactors] = useState<EmissionFactors>(DEFAULT_FACTORS);
   const [factory, setFactory] = useState('EKWL');
   const [year, setYear] = useState(2027);
@@ -460,8 +454,6 @@ const App: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const s = await restGet('settings/general');
-        if (s && s.logo_url) setLogoUrl(s.logo_url);
         const ef = await restGet('settings/emission_factors');
         if (ef) {
           setFactors({
@@ -637,32 +629,19 @@ const App: React.FC = () => {
   };
 
   // SETTINGS
-  const [settingsLogo, setSettingsLogo] = useState(logoUrl);
   const [settingsFactors, setSettingsFactors] = useState<EmissionFactors>(factors);
-  useEffect(() => { setSettingsLogo(logoUrl); }, [logoUrl]);
   useEffect(() => { setSettingsFactors(factors); }, [factors]);
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setSettingsLogo(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
 
   const saveSettings = async () => {
     try {
-      await restSet('settings', 'general', { logo_url: settingsLogo });
       await restSet('settings', 'emission_factors', settingsFactors);
-      setLogoUrl(settingsLogo); setFactors(settingsFactors);
+      setFactors(settingsFactors);
       alert('Settings saved.');
     } catch (e: any) { alert('Save failed: ' + e.message); }
   };
 
   if (bootLoading) return <div className="min-h-screen flex items-center justify-center bg-white"><div className="animate-pulse text-emerald-600 text-sm">Loading...</div></div>;
-  if (!user) return <LoginScreen onLogin={setUser} logoUrl={logoUrl} />;
+  if (!user) return <LoginScreen onLogin={setUser} />;
 
   const allowedSidebar = MODULES.filter(m => canAccessModule(m.id) && (m.id !== 'user_management' || isSuper));
 
@@ -670,19 +649,13 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* TOP BAR */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 relative">
-        
-        {/* FIXED TOP-LEFT LOGO */}
-        <div className="absolute top-1/2 -translate-y-1/2 left-6">
-          <BrandLogo logoUrl={logoUrl} size="sm" />
-        </div>
-
-        <div className="flex items-center justify-between px-4 py-3 pl-20">
+        <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-500 hover:text-emerald-600"><Menu size={20} /></button>
-            <div className="hidden sm:block">
-              <h1 className="text-sm font-bold text-gray-800">Sustainability Portal</h1>
-              <p className="text-[10px] text-emerald-600">Emission &amp; Energy Management</p>
-            </div>
+            
+            {/* GREEN LEAF ICON DASHBOARD SIDEBAR HEADER */}
+            <SidebarLogo />
+            
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden md:flex items-center gap-2">
@@ -932,35 +905,6 @@ const App: React.FC = () => {
 
               {activeModule === 'settings' && (
                 <div className="space-y-4">
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-                    <h2 className="text-sm font-bold text-gray-800 mb-3">General Settings</h2>
-                    
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Logo URL</label>
-                    <textarea 
-                      value={settingsLogo} 
-                      onChange={e => setSettingsLogo(e.target.value)} 
-                      disabled={!isSuper}
-                      placeholder="https://.../logo.png or data:image/..."
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs disabled:bg-gray-50 mb-3 resize-y" 
-                    />
-                    
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Or Upload Custom Logo</label>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleFileUpload}
-                      disabled={!isSuper}
-                      className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 disabled:opacity-50" 
-                    />
-                    
-                    {settingsLogo && settingsLogo.startsWith('data:image') && (
-                      <div className="mt-3">
-                        <p className="text-[10px] text-gray-500 mb-1">Uploaded Logo Preview:</p>
-                        <img src={settingsLogo} alt="Preview" className="h-12 object-contain border border-gray-200 rounded p-1 bg-gray-50" />
-                      </div>
-                    )}
-                  </div>
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
                     <h2 className="text-sm font-bold text-gray-800 mb-3">Emission Factors (kg CO2e)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
