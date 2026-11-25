@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Leaf, LogOut, Users, Settings, BarChart3, Zap, Flame, Factory,
-  FileSpreadsheet, Save, X, Check, AlertCircle, Menu, Eye, EyeOff, Shield, Plus,
-  ChevronDown, ChevronRight, Briefcase, Box, TrendingUp, Target, Globe, 
-  FileCheck, Scale, FolderOpen
+  Leaf, LogOut, Check, AlertCircle, Menu, Eye, EyeOff, Shield,
+  ChevronDown, ChevronRight, Factory, Box, TrendingUp, Target,
+  Globe, FileCheck, Scale, FolderOpen, X
 } from 'lucide-react';
 
 // ============================================================
@@ -51,14 +50,6 @@ const toFSFields = (obj: any): any => {
   return fields;
 };
 
-const restGet = async (path: string) => {
-  const r = await fetch(`${BASE}/${path}?key=${API_KEY}`);
-  if (r.status === 404) return null;
-  if (!r.ok) throw new Error(`GET ${path} failed: ${r.status}`);
-  const json = await r.json();
-  return { id: json.name?.split('/').pop(), ...fromFSFields(json.fields || {}) };
-};
-
 const restList = async (collectionId: string) => {
   const r = await fetch(`${BASE}/${collectionId}?key=${API_KEY}`);
   if (!r.ok) {
@@ -70,16 +61,6 @@ const restList = async (collectionId: string) => {
   return docs.map((d: any) => ({ id: d.name?.split('/').pop(), ...fromFSFields(d.fields || {}) }));
 };
 
-const restSet = async (collectionId: string, docId: string, data: any) => {
-  const r = await fetch(`${BASE}/${collectionId}/${docId}?key=${API_KEY}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: toFSFields(data) }),
-  });
-  if (!r.ok) throw new Error(`SET failed: ${r.status} ${await r.text()}`);
-  return true;
-};
-
 const restCreate = async (collectionId: string, data: any) => {
   const r = await fetch(`${BASE}/${collectionId}?key=${API_KEY}`, {
     method: 'POST',
@@ -89,17 +70,6 @@ const restCreate = async (collectionId: string, data: any) => {
   if (!r.ok) throw new Error(`CREATE failed: ${r.status} ${await r.text()}`);
   const json = await r.json();
   return json.name?.split('/').pop();
-};
-
-const restPatch = async (collectionId: string, docId: string, data: any) => {
-  const mask = Object.keys(data).map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
-  const r = await fetch(`${BASE}/${collectionId}/${docId}?key=${API_KEY}&${mask}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: toFSFields(data) }),
-  });
-  if (!r.ok) throw new Error(`PATCH failed: ${r.status} ${await r.text()}`);
-  return true;
 };
 
 const restQuery = async (collectionId: string, filters: { field: string; value: string }[]) => {
@@ -181,7 +151,7 @@ const MODULES = [
     label: 'License & Permit Tracking', 
     icon: FileCheck,
     subModules: [{ id: 'license_permit_overview', label: 'Overview (Coming Soon)' }]
-  },
+  }, 
   { 
     id: 'legal_requirement', 
     label: 'Legal Requirement Monitoring', 
@@ -196,20 +166,12 @@ const MODULES = [
   },
 ];
 
-const DEFAULT_FACTORS = { grid_electricity: 0.62, natural_gas: 2.02, diesel: 2.68, petrol_octane: 2.31, cng: 2.02 };
-
-// ============================================================
-// HELPERS
-// ============================================================
-const n = (v: any): number => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
-
 // ============================================================
 // MAIN APP
 // ============================================================
 const App: React.FC = () => {
   const [user, setUser] = useState<UserRecord | null>(null);
   const [bootLoading, setBootLoading] = useState(true);
-  const [factors, setFactors] = useState(DEFAULT_FACTORS);
   const [factory, setFactory] = useState('EKWL');
   const [year, setYear] = useState(2027);
   
@@ -225,25 +187,7 @@ const App: React.FC = () => {
     setBootLoading(false);
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const ef = await restGet('settings/emission_factors');
-        if (ef) {
-          setFactors({
-            grid_electricity: n(ef.grid_electricity) || DEFAULT_FACTORS.grid_electricity,
-            natural_gas: n(ef.natural_gas) || DEFAULT_FACTORS.natural_gas,
-            diesel: n(ef.diesel) || DEFAULT_FACTORS.diesel,
-            petrol_octane: n(ef.petrol_octane) || DEFAULT_FACTORS.petrol_octane,
-            cng: n(ef.cng) || DEFAULT_FACTORS.cng,
-          });
-        }
-      } catch {}
-    })();
-  }, []);
-
   const isSuper = user?.role === 'super_admin';
-  const isViewer = user?.role === 'viewer';
 
   const userAllowedModules = useMemo(() => {
     if (!user) return [];
@@ -256,8 +200,6 @@ const App: React.FC = () => {
     if (isSuper) return [...FACTORIES];
     return user.allowed_factories || [];
   }, [user, isSuper]);
-
-  const canAccessModule = (id: string) => userAllowedModules.includes(id);
 
   useEffect(() => {
     if (userAllowedFactories.length && !userAllowedFactories.includes(factory)) setFactory(userAllowedFactories[0]);
@@ -444,8 +386,8 @@ const App: React.FC = () => {
               <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mb-6">
                 <Factory className="text-emerald-600" size={32} />
               </div>
-              <h2 className="text-xl font-bold text-gray-800 mb-2">
-                {currentMain.label} <ChevronRight size={18} className="inline text-gray-400" /> {currentSub.label}
+              <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
+                {currentMain.label} <ChevronRight size={18} className="text-gray-400" /> {currentSub.label}
               </h2>
               <p className="text-sm text-gray-500 max-w-md mb-8">
                 This is a clean placeholder for the new module. You can start building forms, data tables, and analytics here.
