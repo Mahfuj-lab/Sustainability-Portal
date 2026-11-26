@@ -10,6 +10,7 @@ export interface ThemeConfig {
   sidebarText: string;
   headerBg: string;
   mainBg: string;
+  pageBg: string;
   cardBg: string;
   accentBg: string;
   accentText: string;
@@ -26,6 +27,7 @@ export const THEMES: ThemeConfig[] = [
     sidebarText: 'text-emerald-100',
     headerBg: 'bg-emerald-800',
     mainBg: 'bg-emerald-50',
+    pageBg: 'bg-emerald-50',
     cardBg: 'bg-white',
     accentBg: 'bg-emerald-600',
     accentText: 'text-white',
@@ -40,6 +42,7 @@ export const THEMES: ThemeConfig[] = [
     sidebarText: 'text-slate-100',
     headerBg: 'bg-blue-900',
     mainBg: 'bg-slate-100',
+    pageBg: 'bg-slate-100',
     cardBg: 'bg-white',
     accentBg: 'bg-blue-700',
     accentText: 'text-white',
@@ -54,6 +57,7 @@ export const THEMES: ThemeConfig[] = [
     sidebarText: 'text-slate-200',
     headerBg: 'bg-neutral-900',
     mainBg: 'bg-neutral-950',
+    pageBg: 'bg-neutral-950',
     cardBg: 'bg-neutral-900',
     accentBg: 'bg-indigo-500',
     accentText: 'text-white',
@@ -68,6 +72,7 @@ export const THEMES: ThemeConfig[] = [
     sidebarText: 'text-teal-100',
     headerBg: 'bg-teal-800',
     mainBg: 'bg-teal-50',
+    pageBg: 'bg-teal-50',
     cardBg: 'bg-white',
     accentBg: 'bg-teal-600',
     accentText: 'text-white',
@@ -82,6 +87,7 @@ export const THEMES: ThemeConfig[] = [
     sidebarText: 'text-slate-100',
     headerBg: 'bg-slate-700',
     mainBg: 'bg-slate-50',
+    pageBg: 'bg-slate-50',
     cardBg: 'bg-white',
     accentBg: 'bg-slate-600',
     accentText: 'text-white',
@@ -147,11 +153,13 @@ interface AlertRules {
 }
 
 export interface SettingsPanelProps {
-  currentTheme: ThemeKey;
-  onSelectTheme: (theme: ThemeKey) => void;
+  currentThemeId: ThemeKey;
+  onThemeChange: (newTheme: any) => void;
+  theme?: any;
   userRole?: string;
   restGet?: (key: string) => unknown;
   restSet?: (key: string, value: unknown) => void;
+  [key: string]: any;
 }
 
 function readNumber(value: unknown, fallback: number): number {
@@ -164,8 +172,8 @@ function readNumber(value: unknown, fallback: number): number {
 }
 
 export default function SettingsPanel({
-  currentTheme,
-  onSelectTheme,
+  currentThemeId,
+  onThemeChange,
   userRole,
   restGet,
   restSet,
@@ -337,12 +345,12 @@ export default function SettingsPanel({
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {THEMES.map((theme) => {
-              const selected = currentTheme === theme.id;
+              const selected = currentThemeId === theme.id;
               return (
                 <button
                   key={theme.id}
                   type="button"
-                  onClick={() => onSelectTheme(theme.id)}
+                  onClick={() => onThemeChange(theme.id)}
                   className={
                     'text-left rounded-xl border p-4 transition-all shadow-sm hover:shadow-md ' +
                     (selected
@@ -373,7 +381,7 @@ export default function SettingsPanel({
                     <div className={'h-2 flex-1 rounded ' + theme.sidebarBg} />
                     <div className={'h-2 flex-1 rounded ' + theme.headerBg} />
                     <div className={'h-2 flex-1 rounded ' + theme.accentBg} />
-                    <div className={'h-2 flex-1 rounded ' + theme.mainBg + ' border border-slate-200'} />
+                    <div className={'h-2 flex-1 rounded ' + theme.pageBg + ' border border-slate-200'} />
                   </div>
                 </button>
               );
