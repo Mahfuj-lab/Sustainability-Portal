@@ -987,72 +987,60 @@ const App: React.FC = () => {
           )}
 
           {activeModule.startsWith('bte_') && (
-            <BaselineTargetEvaluation
-              activeSubModule={activeModule}
-              selectedUnit={factory}
-              unitFullName={UNIT_FULL_NAMES[factory] || factory}
-              selectedYear={year.toString()}
-              userRole={user?.role || 'viewer'}
-              restGet={restGet}
-              restSet={restSet}
-            />
+                         <BaselineTargetEvaluation
+                activeSubModule={activeModule}
+                selectedUnit={factory}
+                unitFullName={UNIT_FULL_NAMES[factory] || factory}
+                selectedYear={year.toString()}
+                userRole={user?.role || 'viewer'}
+              />
           )}
 
           {activeModule === 'lts_main' && (
-            <LongTermStrategy
-              selectedUnit={factory}
-              unitFullName={UNIT_FULL_NAMES[factory] || factory}
-              selectedYear={year.toString()}
-              userRole={user?.role || 'viewer'}
-              restGet={restGet}
-              restSet={restSet}
-            />
+                         <LongTermStrategy
+                selectedUnit={factory}
+                unitFullName={UNIT_FULL_NAMES[factory] || factory}
+                selectedYear={year.toString()}
+                userRole={user?.role || 'viewer'}
+              />
           )}
 
           {activeModule.startsWith('lp_') && (
-            <LicensePermitTracking
-              activeSubModule={activeModule}
-              selectedUnit={factory}
-              unitFullName={UNIT_FULL_NAMES[factory] || factory}
-              selectedYear={year.toString()}
-              userRole={user?.role || 'viewer'}
-              restGet={restGet}
-              restSet={restSet}
-            />
+                          <LicensePermitTracking
+                activeSubModule={activeModule}
+                selectedUnit={factory}
+                unitFullName={UNIT_FULL_NAMES[factory] || factory}
+                selectedYear={year.toString()}
+                userRole={user?.role || 'viewer'}
+              />
           )}
 
           {activeModule === 'legal_main' && (
-            <LegalRequirementMonitoring
-              selectedUnit={factory}
-              unitFullName={UNIT_FULL_NAMES[factory] || factory}
-              selectedYear={year.toString()}
-              userRole={user?.role || 'viewer'}
-              restGet={restGet}
-              restSet={restSet}
-            />
+                          <LegalRequirementMonitoring
+                selectedUnit={factory}
+                unitFullName={UNIT_FULL_NAMES[factory] || factory}
+                selectedYear={year.toString()}
+                userRole={user?.role || 'viewer'}
+              />
           )}
 
           {activeModule === 'sus_summary_main' && (
-            <SustainabilitySummary
-              selectedUnit={factory}
-              unitFullName={UNIT_FULL_NAMES[factory] || factory}
-              selectedYear={year.toString()}
-              userRole={user?.role || 'viewer'}
-              restGet={restGet}
-              restSet={restSet}
-            />
+                         <SustainabilitySummary
+                selectedUnit={factory}
+                unitFullName={UNIT_FULL_NAMES[factory] || factory}
+                selectedYear={year.toString()}
+                userRole={user?.role || 'viewer'}
+              />
           )}
 
           {activeModule.startsWith('mcd_') && (
-            <McdDataManagement
-              activeSubModule={activeModule}
-              selectedUnit={factory}
-              unitFullName={UNIT_FULL_NAMES[factory] || factory}
-              selectedYear={year.toString()}
-              userRole={user?.role || 'viewer'}
-              restGet={restGet}
-              restSet={restSet}
-            />
+                          <McdDataManagement
+                activeSubModule={activeModule}
+                selectedUnit={factory}
+                unitFullName={UNIT_FULL_NAMES[factory] || factory}
+                selectedYear={year.toString()}
+                userRole={user?.role || 'viewer'}
+              />
           )}
 
           {activeModule.startsWith('hr_') && (
@@ -1066,15 +1054,13 @@ const App: React.FC = () => {
           )}
 
           {activeModule.startsWith('doc_') && (
-            <DocumentsModule
-              activeSubModule={activeModule}
-              selectedUnit={factory}
-              unitFullName={UNIT_FULL_NAMES[factory] || factory}
-              selectedYear={year.toString()}
-              userRole={user?.role || 'viewer'}
-              restGet={restGet}
-              restSet={restSet}
-            />
+                         <DocumentsModule
+                activeSubModule={activeModule}
+                selectedUnit={factory}
+                unitFullName={UNIT_FULL_NAMES[factory] || factory}
+                selectedYear={year.toString()}
+                userRole={user?.role || 'viewer'}
+              />
           )}
 
           {activeModule === 'excel_export' && (
