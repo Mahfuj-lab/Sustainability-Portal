@@ -20,6 +20,7 @@ interface MonthData {
   availableHour: string;
   produceHour: string;
   totalMTO: string;
+  efficiency: string;
   averageSMV: string;
   remarks: string;
   prodPcs: Record<string, string>;
@@ -52,6 +53,7 @@ const getEmptyMonth = (): MonthData => ({
   availableHour: '',
   produceHour: '',
   totalMTO: '',
+  efficiency: '',
   averageSMV: '',
   remarks: '',
   prodPcs: {},
@@ -146,6 +148,7 @@ export default function ProductionOperationsForm({
                   availableHour: rawMonth.availableHour || '',
                   produceHour: rawMonth.produceHour || '',
                   totalMTO: rawMonth.totalMTO || '',
+                  efficiency: rawMonth.efficiency || '',
                   averageSMV: rawMonth.averageSMV || '',
                   remarks: rawMonth.remarks || '',
                   prodPcs: rawMonth.prodPcs || {},
@@ -188,7 +191,7 @@ export default function ProductionOperationsForm({
 
   const updateMonthField = (month: string, field: keyof MonthData, value: string) => {
     if (isViewer) return;
-    if (['manPower', 'workingDays', 'availableHour', 'produceHour', 'totalMTO', 'averageSMV'].includes(field) && !isValidNumber(value)) return;
+    if (['manPower', 'workingDays', 'availableHour', 'produceHour', 'totalMTO', 'efficiency', 'averageSMV'].includes(field) && !isValidNumber(value)) return;
     
     setData(prev => ({
       ...prev,
@@ -234,12 +237,6 @@ export default function ProductionOperationsForm({
     setBuyers(prev => prev.filter(b => b.id !== id));
   };
 
-  const getEfficiency = (row: MonthData) => {
-    const avail = n(row?.availableHour);
-    const prod = n(row?.produceHour);
-    return avail > 0 ? ((prod / avail) * 100).toFixed(2) : '0.00';
-  };
-
   const getSectionTotal = (row: MonthData, section: 'prodPcs' | 'shipPcs' | 'shipKg' | 'shipSam') => {
     if (!row || !row[section]) return 0;
     return buyers.reduce((sum, b) => sum + n(row[section][b.id]), 0);
@@ -262,13 +259,16 @@ export default function ProductionOperationsForm({
   };
 
   const getAvgEfficiency = () => {
-    let totalAvail = 0;
-    let totalProd = 0;
+    let totalEff = 0;
+    let count = 0;
     MONTHS.forEach(m => {
-      totalAvail += n(data[m]?.availableHour);
-      totalProd += n(data[m]?.produceHour);
+      const val = data[m]?.efficiency;
+      if (val !== '' && val !== undefined) {
+        totalEff += n(val);
+        count++;
+      }
     });
-    return totalAvail > 0 ? ((totalProd / totalAvail) * 100).toFixed(2) : '0.00';
+    return count > 0 ? (totalEff / count).toFixed(2) : '0.00';
   };
 
   const generateHTMLTemplate = (isPrint: boolean = false) => {
@@ -341,7 +341,7 @@ export default function ProductionOperationsForm({
           <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.availableHour || ''}</td>
           <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.produceHour || ''}</td>
           <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.totalMTO || ''}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${getEfficiency(row)}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.efficiency || ''}</td>
           <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.averageSMV || ''}</td>
         `;
       }
@@ -396,15 +396,15 @@ export default function ProductionOperationsForm({
     tfoot += '</tr>';
 
     const signatureBlock = isPrint ? `
-      <div style="display: flex; justify-content: space-between; margin-top: 50px; page-break-inside: avoid;">
+      <div style="display: flex; justify-content: space-between; margin-top: 70px; page-break-inside: avoid;">
         <div style="width: 30%; text-align: center;">
-          <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 11px; font-weight: bold;">Prepared By</div>
+          <div style="border-top: 1px solid #333; padding-top: 6px; font-size: 11px; font-weight: bold;">Prepared By</div>
         </div>
         <div style="width: 30%; text-align: center;">
-          <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 11px; font-weight: bold;">Checked By</div>
+          <div style="border-top: 1px solid #333; padding-top: 6px; font-size: 11px; font-weight: bold;">Checked By</div>
         </div>
         <div style="width: 30%; text-align: center;">
-          <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 11px; font-weight: bold;">Approved By</div>
+          <div style="border-top: 1px solid #333; padding-top: 6px; font-size: 11px; font-weight: bold;">Approved By</div>
         </div>
       </div>
     ` : '';
@@ -420,7 +420,7 @@ export default function ProductionOperationsForm({
           th, td { border: 1px solid #000; padding: 4px; }
           ${isPrint ? `
           @media print {
-            @page { size: landscape; margin: 10mm; }
+            @page { size: A4 landscape; margin: 10mm; }
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 0; }
           }
           ` : ''}
@@ -656,7 +656,7 @@ export default function ProductionOperationsForm({
                       <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.availableHour} onChange={(e) => updateMonthField(month, 'availableHour', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
                       <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.produceHour} onChange={(e) => updateMonthField(month, 'produceHour', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
                       <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.totalMTO} onChange={(e) => updateMonthField(month, 'totalMTO', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-2 py-1 text-right font-medium text-emerald-700 bg-emerald-50/30">{getEfficiency(row)}</td>
+                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.efficiency} onChange={(e) => updateMonthField(month, 'efficiency', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
                       <td className="px-1 py-1 border-r border-slate-200"><input type="text" inputMode="decimal" value={row.averageSMV} onChange={(e) => updateMonthField(month, 'averageSMV', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
                     </>
                   )}
