@@ -48,7 +48,7 @@ interface PortalUser {
   allUnits: boolean;
   units: string[];
   modules: string[];
-  status: 'active' | 'suspended';
+  status: string;
   createdAt?: string;
 }
 
