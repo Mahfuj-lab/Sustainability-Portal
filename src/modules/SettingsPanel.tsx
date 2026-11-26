@@ -23,11 +23,12 @@ export const THEMES: ThemeConfig[] = [
     id: 'emerald',
     name: 'Emerald Eco',
     description: 'Fresh, sustainable greens for everyday ESG reporting.',
-    sidebarBg: 'bg-white border-r border-slate-200',
-    sidebarText: 'text-slate-700',
-    headerBg: 'bg-white border-b border-slate-200 text-slate-800',
-    mainBg: 'bg-slate-50',
-    pageBg: 'bg-slate-50',
+    sidebarBg: 'bg-white border-r border-gray-200',
+    sidebarText: 'text-gray-700 font-medium',
+    headerBg: 'bg-white border-b border-gray-200 text-gray-800',
+    mainBg: 'bg-[#f8fafc]',
+    pageBg: 'bg-[#f8fafc]',
+
 
     cardBg: 'bg-white',
     accentBg: 'bg-emerald-600',
