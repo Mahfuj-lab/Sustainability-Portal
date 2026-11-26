@@ -152,7 +152,7 @@ if (activeSubModule === 'inv_electricity_solar') {
     return <BoilerGeneratorCompressorForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
   }
   if (activeSubModule === 'inv_water_withdrawal') {
-    return <WaterWithdrawalForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
+    return <WaterWithdrawalForm selectedUnit={selectedUnit} selectedYear={selectedYear}  />;
   }
 
   return (
