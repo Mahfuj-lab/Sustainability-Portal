@@ -948,8 +948,8 @@ const App: React.FC = () => {
               selectedUnit={factory} 
               unitFullName={UNIT_FULL_NAMES[factory] || factory} 
               userRole={user?.role || 'viewer'} 
-              restGet={restGet} 
-              restSet={restSet} 
+              restSet={restSet as any} 
+              restGet={restGet as any} 
             />
           )}
           {/* NEW INVENTORY MANAGEMENT COMPONENT */}
