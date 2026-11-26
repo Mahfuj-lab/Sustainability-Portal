@@ -235,10 +235,23 @@ const MODULES = [
     id: 'inventory_mgmt', 
     label: 'Inventory Management', 
     icon: Box,
-    subModules: [
+        subModules: [
       { id: 'inv_production_operations', label: 'Production & Operations' },
       { id: 'inv_electricity_solar', label: 'Purchase Electricity & Solar' },
       { id: 'inv_fuel_vehicles', label: 'Natural Gas, Diesel, Vehicles' },
+      { id: 'inv_steam_boiler', label: 'Steam & Boiler' },
+      { id: 'inv_water_withdrawal', label: 'Water Withdrawal' },
+      { id: 'inv_wastewater_etp', label: 'Wastewater & ETP' },
+      { id: 'inv_solid_waste', label: 'Solid Waste & Hazardous Waste' },
+      { id: 'inv_air_emission', label: 'Air Emission & Stack Monitoring' },
+      { id: 'inv_refrigerant', label: 'Refrigerant & ODS' },
+      { id: 'inv_chemical', label: 'Chemical Inventory & ZDHC' },
+      { id: 'inv_transport', label: 'Employee Commuting & Logistics' },
+      { id: 'inv_ghg_summary', label: 'GHG Emission Summary (Scope 1, 2, 3)' },
+    ],
+  },
+
+      
        {
     id: 'kpi_mgmt',
     label: 'KPI Management',
