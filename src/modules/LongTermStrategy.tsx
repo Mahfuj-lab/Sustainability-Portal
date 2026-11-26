@@ -1,0 +1,135 @@
+import React, { useState } from 'react';
+import { 
+  Globe, ChevronDown, Target,
+  ShieldCheck, Zap, Wind, Droplets, Trash2, Activity, Beaker
+} from 'lucide-react';
+
+// ============================================================
+// PROPS
+// ============================================================
+interface LongTermStrategyProps {
+  selectedUnit: string;
+  unitFullName: string;
+  selectedYear: string;
+  userRole: string;
+}
+
+// ============================================================
+// CONSTANTS
+// ============================================================
+const STRATEGY_AREAS = [
+  { id: 'ems', label: 'EMS', icon: ShieldCheck },
+  { id: 'energy', label: 'Energy', icon: Zap },
+  { id: 'ghg', label: 'GHG', icon: Wind },
+  { id: 'water', label: 'Water', icon: Droplets },
+  { id: 'wastewater', label: 'Wastewater', icon: Droplets },
+  { id: 'waste', label: 'Waste', icon: Trash2 },
+  { id: 'air_emission', label: 'Air Emission', icon: Activity },
+  { id: 'chemical', label: 'Chemical', icon: Beaker },
+];
+
+// ============================================================
+// COMPONENT
+// ============================================================
+const LongTermStrategy: React.FC<LongTermStrategyProps> = ({ 
+  selectedUnit, 
+  unitFullName, 
+  selectedYear, 
+  userRole 
+}) => {
+  const [selectedArea, setSelectedArea] = useState<string>('ems');
+
+  const currentArea = STRATEGY_AREAS.find(a => a.id === selectedArea) || STRATEGY_AREAS[0];
+  const AreaIcon = currentArea.icon;
+
+  return (
+    <div className="space-y-6">
+      
+      {/* HEADER BANNER */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+        
+        {/* Left Side: Title and Context */}
+        <div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 mb-1 uppercase tracking-wide">
+            <Globe size={14} /> Strategy
+          </div>
+          <h2 className="text-xl font-bold text-gray-800">Long Term Strategy</h2>
+          <p className="text-sm text-gray-500 font-medium mt-1">
+            {unitFullName} ({selectedUnit}) &bull; {selectedYear}
+          </p>
+        </div>
+
+        {/* Right Side: Area Dropdown */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full lg:w-auto">
+          <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">
+            Select Strategy Area:
+          </label>
+          <div className="relative w-full sm:w-64">
+            <select
+              value={selectedArea}
+              onChange={(e) => setSelectedArea(e.target.value)}
+              className="w-full appearance-none bg-gray-50 border border-gray-300 text-gray-800 text-sm font-medium rounded-lg px-4 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors cursor-pointer"
+            >
+              {STRATEGY_AREAS.map((area) => (
+                <option key={area.id} value={area.id}>
+                  {area.label}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+              <ChevronDown size={16} />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* DYNAMIC VIEW HEADER */}
+      <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-100/80 px-4 py-2 rounded-lg border border-gray-200 w-fit shadow-sm">
+        <Target size={16} className="text-emerald-600" />
+        <span className="font-semibold text-gray-800">Long Term Strategy</span>
+        <span className="text-gray-400">&mdash;</span>
+        <span className="font-semibold text-gray-800">{currentArea.label}</span>
+        <span className="text-gray-400">({selectedUnit} - {selectedYear})</span>
+      </div>
+
+      {/* MAIN WORKSPACE PLACEHOLDER */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm min-h-[500px] flex flex-col items-center justify-center p-8 text-center border-dashed">
+        <div className="w-20 h-20 rounded-2xl bg-emerald-50 flex items-center justify-center mb-6 border border-emerald-100 shadow-sm">
+          <AreaIcon className="text-emerald-600" size={36} />
+        </div>
+        
+        <h3 className="text-xl font-bold text-gray-800 mb-2">
+          {currentArea.label} Strategy Workspace
+        </h3>
+        
+        <p className="text-sm text-gray-500 max-w-md mb-8 leading-relaxed">
+          This is a clean, structured placeholder for the <b>{currentArea.label}</b> long-term strategy targets, 
+          milestones, action plans, and sustainability goals.
+        </p>
+        
+        <div className="flex flex-wrap justify-center gap-3 mb-8">
+          <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+            <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Strategy Area</span>
+            <div className="text-sm font-bold text-emerald-600">{currentArea.label}</div>
+          </div>
+          <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+            <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Year</span>
+            <div className="text-sm font-bold text-gray-800">{selectedYear}</div>
+          </div>
+          <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+            <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Unit</span>
+            <div className="text-sm font-bold text-gray-800">{selectedUnit}</div>
+          </div>
+        </div>
+
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-100">
+          <Target size={14} /> Ready for strategy & action plan implementation
+        </div>
+      </div>
+
+    </div>
+  );
+};
+
+export default LongTermStrategy;
