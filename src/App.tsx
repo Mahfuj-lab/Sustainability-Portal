@@ -7,6 +7,17 @@ import {
 import InventoryManagement from './modules/InventoryManagement';
 import SettingsPanel, { THEMES } from './modules/SettingsPanel';
 import FactoryProfile from './modules/FactoryProfile';
+import KpiManagement from './modules/KpiManagement';
+import BaselineTargetEvaluation from './modules/BaselineTargetEvaluation';
+import LongTermStrategy from './modules/LongTermStrategy';
+import LicensePermitTracking from './modules/LicensePermitTracking';
+import LegalRequirementMonitoring from './modules/LegalRequirementMonitoring';
+import SustainabilitySummary from './modules/SustainabilitySummary';
+import McdDataManagement from './modules/McdDataManagement';
+import HumanResource from './modules/HumanResource';
+import DocumentsModule from './modules/DocumentsModule';
+import CustomExcelExport from './modules/CustomExcelExport';
+import UserManagement from './modules/UserManagement';
 type ThemeKey = string;
 
 // ============================================================
@@ -228,55 +239,83 @@ const MODULES = [
       { id: 'inv_production_operations', label: 'Production & Operations' },
       { id: 'inv_electricity_solar', label: 'Purchase Electricity & Solar' },
       { id: 'inv_fuel_vehicles', label: 'Natural Gas, Diesel, Vehicles' },
-      { id: 'inv_ghg_emission', label: 'GHG Emission' },
-      { id: 'inv_water_wastewater', label: 'Water & Wastewater' },
-      { id: 'inv_waste_management', label: 'Waste Management' },
-      { id: 'inv_refrigerant', label: 'Refrigerant' },
-      { id: 'inv_chemical_management', label: 'Chemical Management' },
-      { id: 'inv_air_emission', label: 'Air Emission Inventory' },
-      { id: 'inv_ppe_inventory', label: 'PPE Inventory' },
-      { id: 'inv_boiler_gen_comp', label: 'Boiler, Generator & Compressor' },
-      { id: 'inv_utility_info', label: 'Utility Information' }
-    ]
-  },
-  { 
-    id: 'kpi_mgmt', 
-    label: 'KPI Management', 
+       {
+    id: 'kpi_mgmt',
+    label: 'KPI Management',
     icon: TrendingUp,
-    subModules: [{ id: 'kpi_mgmt_overview', label: 'Overview (Coming Soon)' }]
+    subModules: [
+      { id: 'kpi_normalized', label: 'Normalized' },
+      { id: 'kpi_absolute', label: 'Absolute' },
+    ],
   },
-  { 
-    id: 'baseline_target', 
-    label: 'Baseline, Target, Evaluation', 
+  {
+    id: 'baseline_target',
+    label: 'Baseline, Target, Evaluation',
     icon: Target,
-    subModules: [{ id: 'baseline_target_overview', label: 'Overview (Coming Soon)' }]
+    subModules: [
+      { id: 'bte_normalized', label: 'Normalized' },
+      { id: 'bte_absolute', label: 'Absolute' },
+    ],
   },
-      {
-      id: 'long_term_strategy',
-      label: 'Long Term Strategy',
-      icon: Target,
-      subModules: [{ id: 'long_term_overview', label: 'Overview (Coming Soon)' }]
-    },
-    {
-      id: 'license_permit',
-      label: 'License & Permit Tracking',
-      icon: FileCheck,
-      subModules: [{ id: 'license_permit_overview', label: 'Overview (Coming Soon)' }]
-    },
-    {
-      id: 'legal_requirement',
-      label: 'Legal Requirement Monitoring',
-      icon: Scale,
-      subModules: [{ id: 'legal_requirement_overview', label: 'Overview (Coming Soon)' }]
-    },
-
-    {
-      id: 'sustainability_summary',
-      label: 'Sustainability Summary',
-      icon: TrendingUp,
-      subModules: [{ id: 'sus_summary_overview', label: 'Overview (Coming Soon)' }]
-    },
-    {
+  {
+    id: 'long_term_strategy',
+    label: 'Long Term Strategy',
+    icon: Target,
+    subModules: [{ id: 'lts_main', label: 'Strategy Overview' }],
+  },
+  {
+    id: 'license_permit',
+    label: 'License & Permit Tracking',
+    icon: FileCheck,
+    subModules: [
+      { id: 'lp_social', label: 'Social Compliance' },
+      { id: 'lp_environment', label: 'Environment Compliance' },
+    ],
+  },
+  {
+    id: 'legal_requirement',
+    label: 'Legal Requirement Monitoring',
+    icon: Scale,
+    subModules: [{ id: 'legal_main', label: 'Legal Register' }],
+  },
+  {
+    id: 'sustainability_summary',
+    label: 'Sustainability Summary',
+    icon: TrendingUp,
+    subModules: [{ id: 'sus_summary_main', label: 'Executive Dashboard' }],
+  },
+  {
+    id: 'mcd_data_management',
+    label: 'MCD Data Management',
+    icon: Globe,
+    subModules: [
+      { id: 'mcd_fabrics', label: 'Fabrics Data' },
+      { id: 'mcd_accessories', label: 'Accessories Data' },
+    ],
+  },
+  {
+    id: 'human_resource',
+    label: 'Human Resource',
+    icon: Users,
+    subModules: [
+      { id: 'hr_total_manpower', label: 'Total Manpower' },
+      { id: 'hr_work_station', label: 'Work Station' },
+      { id: 'hr_summary', label: 'Summary' },
+      { id: 'hr_gate_pass', label: 'Gate pass Report' },
+    ],
+  },
+  {
+    id: 'documents',
+    label: 'Documents',
+    icon: FolderOpen,
+    subModules: [
+      { id: 'doc_hr', label: 'HR' },
+      { id: 'doc_admin', label: 'Admin' },
+      { id: 'doc_social', label: 'Social' },
+      { id: 'doc_environment', label: 'Environment' },
+      { id: 'doc_fire_safety', label: 'Fire, Health & Safety' },
+    ],
+  },
       id: 'mcd_data_management',
       label: 'MCD Data Management',
       icon: Globe,
@@ -924,39 +963,126 @@ const App: React.FC = () => {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-                   {activeModule === 'settings' && (
-            <SettingsPanel
-              currentThemeId={currentTheme}
-              onThemeChange={(newTheme) => setCurrentTheme(newTheme as ThemeKey)}
-              settingsFactors={factors}
-              setSettingsFactors={setFactors}
-              isSuper={isSuper}
-              onSaveSettings={saveSettings}
-              n={n}
-            />
-          )}
-
-                              {activeModule.startsWith('fp_') && (
-            <FactoryProfile
+                           {activeModule.startsWith('kpi_') && (
+            <KpiManagement
               activeSubModule={activeModule}
               selectedUnit={factory}
               unitFullName={UNIT_FULL_NAMES[factory] || factory}
+              selectedYear={year.toString()}
               userRole={user?.role || 'viewer'}
-                            restGet={(path: string) => restGet('factory_profile/' + path.replace(/\//g, '_'))}
-
-              restSet={(path: string, data: any) => restSet('factory_profile', path.replace(/\//g, '_'), data)}
+              restGet={restGet}
+              restSet={restSet}
             />
           )}
 
-          {/* NEW INVENTORY MANAGEMENT COMPONENT */}
-          {activeModule.startsWith('inv_') && (
-            <InventoryManagement
+          {activeModule.startsWith('bte_') && (
+            <BaselineTargetEvaluation
+              activeSubModule={activeModule}
+              selectedUnit={factory}
+              unitFullName={UNIT_FULL_NAMES[factory] || factory}
+              selectedYear={year.toString()}
+              userRole={user?.role || 'viewer'}
+              restGet={restGet}
+              restSet={restSet}
+            />
+          )}
+
+          {activeModule === 'lts_main' && (
+            <LongTermStrategy
+              selectedUnit={factory}
+              unitFullName={UNIT_FULL_NAMES[factory] || factory}
+              selectedYear={year.toString()}
+              userRole={user?.role || 'viewer'}
+              restGet={restGet}
+              restSet={restSet}
+            />
+          )}
+
+          {activeModule.startsWith('lp_') && (
+            <LicensePermitTracking
+              activeSubModule={activeModule}
+              selectedUnit={factory}
+              unitFullName={UNIT_FULL_NAMES[factory] || factory}
+              selectedYear={year.toString()}
+              userRole={user?.role || 'viewer'}
+              restGet={restGet}
+              restSet={restSet}
+            />
+          )}
+
+          {activeModule === 'legal_main' && (
+            <LegalRequirementMonitoring
+              selectedUnit={factory}
+              unitFullName={UNIT_FULL_NAMES[factory] || factory}
+              selectedYear={year.toString()}
+              userRole={user?.role || 'viewer'}
+              restGet={restGet}
+              restSet={restSet}
+            />
+          )}
+
+          {activeModule === 'sus_summary_main' && (
+            <SustainabilitySummary
+              selectedUnit={factory}
+              unitFullName={UNIT_FULL_NAMES[factory] || factory}
+              selectedYear={year.toString()}
+              userRole={user?.role || 'viewer'}
+              restGet={restGet}
+              restSet={restSet}
+            />
+          )}
+
+          {activeModule.startsWith('mcd_') && (
+            <McdDataManagement
+              activeSubModule={activeModule}
+              selectedUnit={factory}
+              unitFullName={UNIT_FULL_NAMES[factory] || factory}
+              selectedYear={year.toString()}
+              userRole={user?.role || 'viewer'}
+              restGet={restGet}
+              restSet={restSet}
+            />
+          )}
+
+          {activeModule.startsWith('hr_') && (
+            <HumanResource
+              activeSubModule={activeModule}
+              selectedUnit={factory}
+              unitFullName={UNIT_FULL_NAMES[factory] || factory}
+              selectedYear={year.toString()}
+              userRole={user?.role || 'viewer'}
+            />
+          )}
+
+          {activeModule.startsWith('doc_') && (
+            <DocumentsModule
+              activeSubModule={activeModule}
+              selectedUnit={factory}
+              unitFullName={UNIT_FULL_NAMES[factory] || factory}
+              selectedYear={year.toString()}
+              userRole={user?.role || 'viewer'}
+              restGet={restGet}
+              restSet={restSet}
+            />
+          )}
+
+          {activeModule === 'excel_export' && (
+            <CustomExcelExport
+              selectedUnit={factory}
+              selectedYear={year.toString()}
+              userRole={user?.role || 'viewer'}
+              restGet={restGet}
+            />
+          )}
+
+          {activeModule === 'user_management' && (
+            <UserManagement
+              currentUser={user}
+              userRole={user?.role || 'viewer'}
+              restGet={restGet}
+              restSet={restSet}
+            />
+          )}
               activeSubModule={activeModule}
               selectedUnit={factory}
               selectedYear={year.toString()}
