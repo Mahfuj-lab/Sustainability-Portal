@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, Trash2, Save, CheckCircle2, 
-  Factory, Layers
+  Factory, Layers, Download
 } from 'lucide-react';
 
 // ============================================================
@@ -58,6 +58,7 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
   const isViewer = userRole === 'viewer';
   const [loading, setLoading] = useState(false); 
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState('');
   
   const [basicInfo, setBasicInfo] = useState<any>({});
@@ -73,7 +74,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
 
   const processOptions = ["Knitting", "Dyeing", "Washing", "Cutting", "Sewing", "Finishing", "Printing", "Embroidery"];
 
-  // Data Fetching (Removed restGet from dependency array)
   useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
@@ -152,6 +152,236 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
     }
   };
 
+  const generatePDF = async () => {
+    setExporting(true);
+    try {
+      // 1. Fetch all modules (fallback to empty if not found)
+      const [basicData, premisesData, workingData, floorsData, machinesData] = await Promise.all([
+        restGet(`units/${selectedUnit}/factory_profile/fp_basic_info`),
+        restGet(`units/${selectedUnit}/factory_profile/fp_premises`),
+        restGet(`units/${selectedUnit}/factory_profile/fp_working_hour`),
+        restGet(`units/${selectedUnit}/factory_profile/fp_floor_glance`),
+        restGet(`units/${selectedUnit}/factory_profile/fp_machinery_list`)
+      ]);
+
+      // 2. Merge with active unsaved state
+      const exportBasic = activeSubModule === 'fp_basic_info' ? { basicInfo, contacts, customFields: customBasic } : (basicData || {});
+      const exportPremises = activeSubModule === 'fp_premises' ? { premises, customFields: customPremises } : (premisesData || {});
+      const exportWorking = activeSubModule === 'fp_working_hour' ? { workingHour, customFields: customWorking } : (workingData || {});
+      const exportFloors = activeSubModule === 'fp_floor_glance' ? { floors } : (floorsData || { floors: getInitialFloors() });
+      const exportMachines = activeSubModule === 'fp_machinery_list' ? { machines } : (machinesData || { machines: getInitialMachines() });
+
+      // 3. Build HTML
+      const bInfo = exportBasic.basicInfo || {};
+      const bContacts = exportBasic.contacts || [];
+      const bCustom = exportBasic.customFields || [];
+      const pData = exportPremises.premises || {};
+      const pCustom = exportPremises.customFields || [];
+      const wData = exportWorking.workingHour || {};
+      const wCustom = exportWorking.customFields || [];
+      const fData = exportFloors.floors || [];
+      const mData = exportMachines.machines || [];
+
+      const renderRow = (label: string, value: any) => `
+        <tr>
+          <td style="border: 1px solid #cbd5e1; padding: 6px 10px; font-weight: 600; width: 40%; background-color: #f8fafc; color: #334155; font-size: 10px;">${label}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 6px 10px; color: #1e293b; font-size: 10px;">${value || '-'}</td>
+        </tr>
+      `;
+
+      let html = `
+        <html>
+          <head>
+            <title>Factory Profile - ${selectedUnit}</title>
+            <style>
+              @media print {
+                @page { size: A4; margin: 15mm; }
+                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                .page-break { page-break-before: always; }
+              }
+              body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; color: #0f172a; }
+              .header { text-align: center; border-bottom: 2px solid #10b981; padding-bottom: 15px; margin-bottom: 20px; }
+              .header h1 { margin: 0; font-size: 22px; color: #065f46; text-transform: uppercase; letter-spacing: 1px; }
+              .header h2 { margin: 5px 0 0 0; font-size: 14px; color: #475569; font-weight: normal; }
+              .header .date { margin-top: 10px; font-size: 10px; color: #64748b; }
+              .section-title { font-size: 14px; font-weight: bold; color: #065f46; background-color: #ecfdf5; padding: 6px 10px; border-left: 4px solid #10b981; margin: 20px 0 10px 0; text-transform: uppercase; }
+              table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+              th { border: 1px solid #cbd5e1; padding: 6px 10px; background-color: #f1f5f9; font-size: 10px; text-align: left; color: #475569; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>${unitFullName || selectedUnit}</h1>
+              <h2>Unit Code: ${selectedUnit} | FACTORY PROFILE</h2>
+              <div class="date">Exported on: ${new Date().toLocaleString()}</div>
+            </div>
+
+            <!-- SECTION 1: BASIC INFO -->
+            <div class="section-title">1. Basic Information</div>
+            <table>
+              ${renderRow('Name of the Facility', bInfo.name)}
+              ${renderRow('Facility Address', bInfo.address)}
+              ${renderRow('Zip Code', bInfo.zip)}
+              ${renderRow('Name of the Owner', bInfo.owner)}
+              ${renderRow('Years in Operation', bInfo.yearsOperation)}
+              ${renderRow('Number of Line/Table', bInfo.lines)}
+              ${renderRow('Name of major buyer', bInfo.buyer)}
+              ${renderRow('Monthly Production Capacity', bInfo.capacity)}
+              ${renderRow('Full Time Doctor', bInfo.doctor)}
+              ${renderRow('Doctor Details', bInfo.doctorDetails)}
+              ${renderRow('Full Time Nurse', bInfo.nurse)}
+              ${renderRow('Nurse Details', bInfo.nurseDetails)}
+              ${renderRow('Child Care with Wash Facility', bInfo.childCare)}
+              ${renderRow('Child Care Capacity', bInfo.childCareCapacity)}
+              ${renderRow('Dining Area', bInfo.dining)}
+              ${renderRow('Dining Seating Capacity', bInfo.diningCapacity)}
+              ${renderRow('First Aid Box Quantity', bInfo.firstAid)}
+              ${renderRow('Total First Aider', bInfo.firstAider)}
+              ${renderRow('Drinking Water Facility', bInfo.drinkingWater)}
+              ${renderRow('Water Capacity/Method', bInfo.waterCapacity)}
+              ${renderRow('Number of Complain Box', bInfo.complainBox)}
+              ${renderRow('Contract workers', bInfo.contractWorkers)}
+              ${renderRow('How Many Contract Workers', bInfo.contractCount)}
+              ${bCustom.map((cf: any) => renderRow(cf.label, cf.value)).join('')}
+            </table>
+
+            <div style="font-weight: bold; font-size: 11px; margin: 15px 0 5px 0; color: #334155;">Contact Persons</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Designation</th>
+                  <th>Tel/Cell</th>
+                  <th>E-mail</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bContacts.length > 0 ? bContacts.map((c: any) => `
+                  <tr>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10px;">${c.name || '-'}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10px;">${c.designation || '-'}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10px;">${c.phone || '-'}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10px;">${c.email || '-'}</td>
+                  </tr>
+                `).join('') : '<tr><td colspan="4" style="border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10px; text-align: center;">No contacts added</td></tr>'}
+              </tbody>
+            </table>
+
+            <!-- SECTION 2: PREMISES -->
+            <div class="section-title page-break">2. Factory Premises</div>
+            <table>
+              ${renderRow('Total Land Area', pData.landArea)}
+              ${renderRow('Total Numbers of Buildings', pData.buildings)}
+              ${renderRow('Total Numbers of Floors', pData.floors)}
+              ${renderRow('Centralized Fire Detection', pData.fireDetect)}
+              ${renderRow('Fire Hydrant System', pData.hydrant)}
+              ${renderRow('Water Reserve Tank', pData.reserveTank)}
+              ${renderRow('Water Reserve Tank Capacity', pData.reserveTankCapacity)}
+              ${renderRow('Fire Door Status', pData.fireDoor)}
+              ${renderRow('Number of Exits', pData.exits)}
+              ${renderRow('Total ETP Area', pData.etpArea)}
+              ${renderRow('Total ETP Capacity', pData.etpCapacity)}
+              ${renderRow('Eye wash station', pData.eyeWash)}
+              ${renderRow('Total Production Area (SFT)', pData.prodArea)}
+              ${renderRow('Total Cutting Area (SFT)', pData.cutArea)}
+              ${renderRow('Total Sewing Area (SFT)', pData.sewArea)}
+              ${renderRow('Total Finishing Area (SFT)', pData.finishArea)}
+              ${renderRow('Total Warehouse Area (SFT)', pData.warehouseArea)}
+              ${renderRow('Fabrics Warehouse Area (SFT)', pData.fabricsWHArea)}
+              ${renderRow('Finished Goods Warehouse (SFT)', pData.finishedWHArea)}
+              ${renderRow('Accessories Warehouse (SFT)', pData.accWHArea)}
+              ${renderRow('Dining Area (SFT)', pData.diningArea)}
+              ${renderRow('Utility Area (SFT)', pData.utilityArea)}
+              ${renderRow('Other Areas (SFT)', pData.otherArea)}
+              ${renderRow('Total Factory Area', pData.totalFactoryArea)}
+              ${pCustom.map((cf: any) => renderRow(cf.label, cf.value)).join('')}
+            </table>
+
+            <!-- SECTION 3: WORKING HOUR -->
+            <div class="section-title page-break">3. Working Hour & Payment System</div>
+            <table>
+              ${renderRow('Working Days per Week', wData.daysWeek)}
+              ${renderRow('Working Hour Per Day', wData.hoursDay)}
+              ${renderRow('Overtime Hours', wData.overtime)}
+              ${renderRow('Break/Lunch Hour', wData.breakHour)}
+              ${renderRow('Wage/Payment System', wData.wageSystem)}
+              ${renderRow('Monthly Salary Date', wData.salaryDate)}
+              ${renderRow('Overtime Payment Date', wData.overtimeDate)}
+              ${wCustom.map((cf: any) => renderRow(cf.label, cf.value)).join('')}
+            </table>
+
+            <!-- SECTION 4: FLOOR GLANCE -->
+            <div class="section-title page-break">4. Floor At a Glance</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 30%;">Floor Name</th>
+                  <th>Sections / Departments</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${fData.length > 0 ? fData.map((f: any) => `
+                  <tr>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px 10px; font-weight: 600; font-size: 10px; vertical-align: top;">${f.name || '-'}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10px; vertical-align: top;">
+                      ${(f.sections || []).map((s: any) => s.name).filter(Boolean).join(', ') || '-'}
+                    </td>
+                  </tr>
+                `).join('') : '<tr><td colspan="2" style="border: 1px solid #cbd5e1; padding: 6px 10px; text-align: center;">No floors defined</td></tr>'}
+              </tbody>
+            </table>
+
+            <!-- SECTION 5: MACHINERY -->
+            <div class="section-title page-break">5. Machinery List</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 10%;">S/L</th>
+                  <th>Name of Machine</th>
+                  <th style="width: 20%; text-align: right;">Total Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${mData.map((m: any, i: number) => `
+                  <tr>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10px;">${i + 1}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10px;">${m.name || '-'}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10px; text-align: right;">${m.qty || 0}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="2" style="border: 1px solid #cbd5e1; padding: 8px 10px; font-weight: bold; text-align: right; background-color: #f1f5f9; font-size: 11px;">Total Machinery Qty:</td>
+                  <td style="border: 1px solid #cbd5e1; padding: 8px 10px; font-weight: bold; text-align: right; background-color: #f1f5f9; font-size: 11px;">${mData.reduce((sum: number, m: any) => sum + (Number(m.qty) || 0), 0)}</td>
+                </tr>
+              </tfoot>
+            </table>
+            
+            <div style="margin-top: 40px; text-align: center; font-size: 10px; color: #94a3b8;">
+              This is a system-generated document from the Sustainability Portal.
+            </div>
+          </body>
+        </html>
+      `;
+
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate PDF report.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleBasicChange = (key: string, val: any) => setBasicInfo((prev: any) => ({ ...prev, [key]: val }));
   const handlePremisesChange = (key: string, val: any) => setPremises((prev: any) => ({ ...prev, [key]: val }));
   const handleWorkingChange = (key: string, val: any) => setWorkingHour((prev: any) => ({ ...prev, [key]: val }));
@@ -212,15 +442,24 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
             {unitFullName} ({selectedUnit})
           </p>
         </div>
-        {!isViewer && (
+        <div className="flex gap-2">
           <button 
-            onClick={handleSave} 
-            disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors"
+            onClick={generatePDF}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded-lg text-sm font-semibold shadow-sm transition-colors border border-gray-200"
           >
-            <Save size={16} /> {saving ? 'Saving...' : 'Save Data'}
+            <Download size={16} /> {exporting ? 'Generating...' : 'Download Full Profile (PDF)'}
           </button>
-        )}
+          {!isViewer && (
+            <button 
+              onClick={handleSave} 
+              disabled={saving}
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors"
+            >
+              <Save size={16} /> {saving ? 'Saving...' : 'Save Data'}
+            </button>
+          )}
+        </div>
       </div>
 
       {toast && (
@@ -231,7 +470,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-8 relative min-h-[400px]">
         
-        {/* Subtle Loading Indicator (does not block inputs) */}
         {loading && (
           <div className="absolute top-0 left-0 w-full h-1 bg-emerald-100 overflow-hidden rounded-t-xl">
             <div className="w-full h-full bg-emerald-500 animate-pulse"></div>
@@ -486,7 +724,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
           </div>
         )}
         
-        {/* Fallback if submodule is unknown */}
         {!['fp_basic_info', 'fp_premises', 'fp_working_hour', 'fp_floor_glance', 'fp_machinery_list'].includes(activeSubModule) && (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500">
             <Factory size={48} className="text-gray-300 mb-4" />
