@@ -442,8 +442,8 @@ const App: React.FC = () => {
 
   const userAllowedModules = useMemo(() => {
     if (!user) return [];
-    if (isSuper) return MODULES.map(m => m.id);
-    return MODULES.map(m => m.id); // Default to all new modules for everyone
+       return MODULES.flatMap(m => [m.id, ...m.subModules.map(s => s.id)]);
+
   }, [user, isSuper]);
 
   const userAllowedFactories = useMemo(() => {
