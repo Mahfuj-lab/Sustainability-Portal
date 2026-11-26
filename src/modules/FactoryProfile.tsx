@@ -223,7 +223,8 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
           </head>
           <body>
             <div class="header-container">
-              <img src="${logoSrc}" onerror="this.style.display='none'" alt="Epyllion Group Logo" class="header-logo" />
+                          <img src="${logoSrc}" onerror="this.style.display='none'" alt="Epyllion Group Logo" class="header-logo" style="height: 85px; width: auto; object-fit: contain;" />
+
               <div class="header-center">
                 <h1 class="header-title">${fullUnitName}</h1>
                 ${fullUnitAddress ? `<p class="header-address">${fullUnitAddress}</p>` : ''}
