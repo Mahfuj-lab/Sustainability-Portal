@@ -339,7 +339,8 @@ export default function BoilerGeneratorCompressorForm({
         [month]: {
           ...prevMonth,
           [section]: {
-            ...(prevMonth[section] || {}),
+            ...((prevMonth[section] as any) || {}),
+
             [id]: value,
           },
         },
