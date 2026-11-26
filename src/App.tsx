@@ -1077,6 +1077,36 @@ const App: React.FC = () => {
               restGet={restGet}
               restSet={restSet}
             />
+              {activeModule.startsWith('fp_') && (
+            <FactoryProfile
+              activeSubModule={activeModule}
+              selectedUnit={factory}
+              selectedYear={year.toString()}
+              userRole={user?.role || 'viewer'}
+              restGet={restGet}
+              restSet={restSet}
+            />
+          )}
+
+          {activeModule.startsWith('inv_') && (
+            <InventoryManagement
+              activeSubModule={activeModule}
+              selectedUnit={factory}
+              selectedYear={year.toString()}
+              userRole={user?.role || 'viewer'}
+            />
+          )}
+
+          {activeModule === 'settings' && (
+            <SettingsPanel
+              currentThemeId={themeId}
+              onThemeChange={(newTheme: any) => setThemeId(typeof newTheme === 'string' ? newTheme : newTheme.id)}
+              userRole={user?.role || 'viewer'}
+              restGet={restGet}
+              restSet={restSet}
+            />
+          )}
+
           )}
              
         </main>
