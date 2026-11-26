@@ -244,14 +244,25 @@ const MODULES = [
     icon: Target,
     subModules: [{ id: 'baseline_target_overview', label: 'Overview (Coming Soon)' }]
   },
-  { 
-    id: 'long_term_strategy', 
-        {
+      {
+      id: 'long_term_strategy',
+      label: 'Long Term Strategy',
+      icon: Compass,
+      subModules: [{ id: 'long_term_overview', label: 'Overview (Coming Soon)' }]
+    },
+    {
+      id: 'license_permit',
+      label: 'License & Permit Tracking',
+      icon: FileCheck,
+      subModules: [{ id: 'license_permit_overview', label: 'Overview (Coming Soon)' }]
+    },
+    {
       id: 'legal_requirement',
       label: 'Legal Requirement Monitoring',
       icon: Scale,
       subModules: [{ id: 'legal_requirement_overview', label: 'Overview (Coming Soon)' }]
     },
+
     {
       id: 'sustainability_summary',
       label: 'Sustainability Summary',
