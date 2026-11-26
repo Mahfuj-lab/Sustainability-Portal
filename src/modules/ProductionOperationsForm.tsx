@@ -30,6 +30,8 @@ interface MonthData {
 
 type FormData = Record<string, MonthData>;
 
+type SectionKey = 'ops' | 'prod' | 'shipPcs' | 'shipKg' | 'shipSam' | 'remarks';
+
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -111,7 +113,15 @@ export default function ProductionOperationsForm({
 
   const [data, setData] = useState<FormData>({});
   const [isSaved, setIsSaved] = useState(false);
-  const [exportMode, setExportMode] = useState<string>('all');
+
+  const [sections, setSections] = useState<Record<SectionKey, boolean>>({
+    ops: true,
+    prod: true,
+    shipPcs: true,
+    shipKg: true,
+    shipSam: true,
+    remarks: true,
+  });
 
   useEffect(() => {
     try {
@@ -261,121 +271,159 @@ export default function ProductionOperationsForm({
     return totalAvail > 0 ? ((totalProd / totalAvail) * 100).toFixed(2) : '0.00';
   };
 
-  const generateHTMLTable = (includeOperations: boolean, includeProd: boolean, includeShipPcs: boolean, includeShipKg: boolean, includeShipSam: boolean) => {
-    const title = `Production & Operations Report - ${safeYear}`;
+  const generateHTMLTemplate = (isPrint: boolean = false) => {
+    const title = `Production & Operations Report`;
+    const logoHtml = `<img src="/epyllion-logo.png" alt="Epyllion" style="height: 40px; margin-bottom: 10px;" onerror="this.style.display='none'" />`;
 
     const letterhead = `
       <div style="text-align: center; margin-bottom: 20px;">
+        ${logoHtml}
         <h1 style="color: #065f46; margin: 0; font-size: 24px;">Epyllion Group</h1>
         <h2 style="margin: 5px 0; font-size: 18px;">${unitInfo.fullName}</h2>
         <p style="margin: 0; font-size: 12px; color: #555;">${unitInfo.address}</p>
-        <p style="margin: 5px 0; font-size: 14px; font-weight: bold;">${title}</p>
-        <p style="margin: 2px 0; font-size: 12px; font-weight: bold; color: #065f46;">Reporting Year: ${safeYear}</p>
+        <p style="margin: 8px 0 2px 0; font-size: 14px; font-weight: bold;">${title}</p>
+        <p style="margin: 0; font-size: 12px; font-weight: bold; color: #065f46;">Reporting Year: ${safeYear}</p>
       </div>
     `;
 
     let tableHeaders = '<tr><th style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6;">Month</th>';
     
-    if (includeOperations) {
+    if (sections.ops) {
       tableHeaders += `
-        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5;">Man Power</th>
-        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5;">Working Days</th>
-        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5;">Available Hour</th>
-        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5;">Produce Hour</th>
-        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5;">Total MTO</th>
-        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5;">Efficiency (%)</th>
-        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5;">Avg SMV</th>
+        <th colspan="7" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-weight: bold;">FACTORY OPERATIONS</th>
+      `;
+    }
+    if (sections.prod) tableHeaders += `<th colspan="${buyers.length + 1}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-weight: bold;">PRODUCTION QUANTITY (PCS)</th>`;
+    if (sections.shipPcs) tableHeaders += `<th colspan="${buyers.length + 1}" style="border: 1px solid #000; padding: 5px; background-color: #e0e7ff; text-align: center; font-weight: bold;">SHIPMENT QUANTITY (PCS)</th>`;
+    if (sections.shipKg) tableHeaders += `<th colspan="${buyers.length + 1}" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-weight: bold;">SHIPMENT QUANTITY (KG)</th>`;
+    if (sections.shipSam) tableHeaders += `<th colspan="${buyers.length + 1}" style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-weight: bold;">SHIPMENT QUANTITY (SAM)</th>`;
+    if (sections.remarks) tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6; text-align: center; font-weight: bold;">REMARKS</th>`;
+    tableHeaders += '</tr><tr><th style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6;"></th>';
+
+    if (sections.ops) {
+      tableHeaders += `
+        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Man Power</th>
+        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Working Days</th>
+        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Available Hour</th>
+        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Produce Hour</th>
+        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Total MTO</th>
+        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Efficiency (%)</th>
+        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Avg SMV</th>
       `;
     }
     
     const buildBuyerHeaders = (bgColor: string) => {
       let h = '';
       buyers.forEach(b => {
-        h += `<th style="border: 1px solid #000; padding: 5px; background-color: ${bgColor};">${b.name || 'Unnamed'}</th>`;
+        h += `<th style="border: 1px solid #000; padding: 5px; background-color: ${bgColor}; font-size: 11px;">${b.name || 'Unnamed'}</th>`;
       });
-      h += `<th style="border: 1px solid #000; padding: 5px; background-color: ${bgColor}; font-weight: bold;">Total</th>`;
+      h += `<th style="border: 1px solid #000; padding: 5px; background-color: ${bgColor}; font-weight: bold; font-size: 11px;">Total</th>`;
       return h;
     };
 
-    if (includeProd) tableHeaders += buildBuyerHeaders('#eff6ff');
-    if (includeShipPcs) tableHeaders += buildBuyerHeaders('#e0e7ff');
-    if (includeShipKg) tableHeaders += buildBuyerHeaders('#fffbeb');
-    if (includeShipSam) tableHeaders += buildBuyerHeaders('#fff7ed');
+    if (sections.prod) tableHeaders += buildBuyerHeaders('#eff6ff');
+    if (sections.shipPcs) tableHeaders += buildBuyerHeaders('#e0e7ff');
+    if (sections.shipKg) tableHeaders += buildBuyerHeaders('#fffbeb');
+    if (sections.shipSam) tableHeaders += buildBuyerHeaders('#fff7ed');
     
-    tableHeaders += '<th style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6;">Remarks</th></tr>';
+    if (sections.remarks) tableHeaders += '<th style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6;"></th>';
+    tableHeaders += '</tr>';
 
     let tbody = '';
     MONTHS.forEach(m => {
       const row = data[m] || getEmptyMonth();
-      tbody += `<tr><td style="border: 1px solid #000; padding: 5px; font-weight: bold;">${m}</td>`;
+      tbody += `<tr><td style="border: 1px solid #000; padding: 5px; font-weight: bold; font-size: 11px;">${m}</td>`;
       
-      if (includeOperations) {
+      if (sections.ops) {
         tbody += `
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.manPower || ''}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.workingDays || ''}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.availableHour || ''}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.produceHour || ''}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.totalMTO || ''}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${getEfficiency(row)}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.averageSMV || ''}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.manPower || ''}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.workingDays || ''}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.availableHour || ''}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.produceHour || ''}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.totalMTO || ''}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${getEfficiency(row)}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.averageSMV || ''}</td>
         `;
       }
 
       const buildBuyerCells = (section: 'prodPcs' | 'shipPcs' | 'shipKg' | 'shipSam') => {
         let c = '';
         buyers.forEach(b => {
-          c += `<td style="border: 1px solid #000; padding: 5px; text-align: right;">${row[section]?.[b.id] || ''}</td>`;
+          c += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row[section]?.[b.id] || ''}</td>`;
         });
-        c += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold;">${fmt(getSectionTotal(row, section))}</td>`;
+        c += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getSectionTotal(row, section))}</td>`;
         return c;
       };
 
-      if (includeProd) tbody += buildBuyerCells('prodPcs');
-      if (includeShipPcs) tbody += buildBuyerCells('shipPcs');
-      if (includeShipKg) tbody += buildBuyerCells('shipKg');
-      if (includeShipSam) tbody += buildBuyerCells('shipSam');
+      if (sections.prod) tbody += buildBuyerCells('prodPcs');
+      if (sections.shipPcs) tbody += buildBuyerCells('shipPcs');
+      if (sections.shipKg) tbody += buildBuyerCells('shipKg');
+      if (sections.shipSam) tbody += buildBuyerCells('shipSam');
 
-      tbody += `<td style="border: 1px solid #000; padding: 5px;">${row.remarks || ''}</td></tr>`;
+      if (sections.remarks) tbody += `<td style="border: 1px solid #000; padding: 5px; font-size: 11px;">${row.remarks || ''}</td>`;
+      tbody += `</tr>`;
     });
 
-    let tfoot = '<tr style="background-color: #f3f4f6; font-weight: bold;"><td style="border: 1px solid #000; padding: 5px;">Total</td>';
+    let tfoot = '<tr style="background-color: #f3f4f6; font-weight: bold;"><td style="border: 1px solid #000; padding: 5px; font-size: 11px;">Total</td>';
     
-    if (includeOperations) {
+    if (sections.ops) {
       tfoot += `
-        <td style="border: 1px solid #000; padding: 5px; text-align: right;">${fmt(getFactoryYearTotal('manPower'))}</td>
-        <td style="border: 1px solid #000; padding: 5px; text-align: right;">${fmt(getFactoryYearTotal('workingDays'))}</td>
-        <td style="border: 1px solid #000; padding: 5px; text-align: right;">${fmt(getFactoryYearTotal('availableHour'))}</td>
-        <td style="border: 1px solid #000; padding: 5px; text-align: right;">${fmt(getFactoryYearTotal('produceHour'))}</td>
-        <td style="border: 1px solid #000; padding: 5px; text-align: right;">${fmt(getFactoryYearTotal('totalMTO'))}</td>
-        <td style="border: 1px solid #000; padding: 5px; text-align: right;">${getAvgEfficiency()}</td>
-        <td style="border: 1px solid #000; padding: 5px; text-align: right;">-</td>
+        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getFactoryYearTotal('manPower'))}</td>
+        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getFactoryYearTotal('workingDays'))}</td>
+        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getFactoryYearTotal('availableHour'))}</td>
+        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getFactoryYearTotal('produceHour'))}</td>
+        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getFactoryYearTotal('totalMTO'))}</td>
+        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${getAvgEfficiency()}</td>
+        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">-</td>
       `;
     }
 
     const buildBuyerFooter = (section: 'prodPcs' | 'shipPcs' | 'shipKg' | 'shipSam') => {
       let c = '';
       buyers.forEach(b => {
-        c += `<td style="border: 1px solid #000; padding: 5px; text-align: right;">${fmt(getBuyerYearTotal(b.id, section))}</td>`;
+        c += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getBuyerYearTotal(b.id, section))}</td>`;
       });
-      c += `<td style="border: 1px solid #000; padding: 5px; text-align: right;">${fmt(getColumnYearTotal(section))}</td>`;
+      c += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getColumnYearTotal(section))}</td>`;
       return c;
     };
 
-    if (includeProd) tfoot += buildBuyerFooter('prodPcs');
-    if (includeShipPcs) tfoot += buildBuyerFooter('shipPcs');
-    if (includeShipKg) tfoot += buildBuyerFooter('shipKg');
-    if (includeShipSam) tfoot += buildBuyerFooter('shipSam');
+    if (sections.prod) tfoot += buildBuyerFooter('prodPcs');
+    if (sections.shipPcs) tfoot += buildBuyerFooter('shipPcs');
+    if (sections.shipKg) tfoot += buildBuyerFooter('shipKg');
+    if (sections.shipSam) tfoot += buildBuyerFooter('shipSam');
 
-    tfoot += '<td style="border: 1px solid #000; padding: 5px;">-</td></tr>';
+    if (sections.remarks) tfoot += '<td style="border: 1px solid #000; padding: 5px; font-size: 11px;">-</td>';
+    tfoot += '</tr>';
+
+    const signatureBlock = isPrint ? `
+      <div style="display: flex; justify-content: space-between; margin-top: 50px; page-break-inside: avoid;">
+        <div style="width: 30%; text-align: center;">
+          <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 11px; font-weight: bold;">Prepared By</div>
+        </div>
+        <div style="width: 30%; text-align: center;">
+          <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 11px; font-weight: bold;">Checked By</div>
+        </div>
+        <div style="width: 30%; text-align: center;">
+          <div style="border-top: 1px solid #000; padding-top: 5px; font-size: 11px; font-weight: bold;">Approved By</div>
+        </div>
+      </div>
+    ` : '';
 
     return `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
       <head>
         <meta charset="utf-8" />
+        <title>Production & Operations - ${safeUnit} - ${safeYear}</title>
         <style>
-          body { font-family: Arial, sans-serif; }
-          table { border-collapse: collapse; width: 100%; font-size: 12px; }
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          table { border-collapse: collapse; width: 100%; font-size: 11px; }
           th, td { border: 1px solid #000; padding: 4px; }
+          ${isPrint ? `
+          @media print {
+            @page { size: landscape; margin: 10mm; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 0; }
+          }
+          ` : ''}
         </style>
       </head>
       <body>
@@ -385,47 +433,14 @@ export default function ProductionOperationsForm({
           <tbody>${tbody}</tbody>
           <tfoot>${tfoot}</tfoot>
         </table>
+        ${signatureBlock}
       </body>
       </html>
     `;
   };
 
   const handleExport = () => {
-    let includeOps = false;
-    let includeProd = false;
-    let includeShipPcs = false;
-    let includeShipKg = false;
-    let includeShipSam = false;
-
-    switch (exportMode) {
-      case 'all':
-        includeOps = true;
-        includeProd = true;
-        includeShipPcs = true;
-        includeShipKg = true;
-        includeShipSam = true;
-        break;
-      case 'prod_pcs':
-        includeOps = true;
-        includeProd = true;
-        break;
-      case 'ship_pcs':
-        includeShipPcs = true;
-        break;
-      case 'ship_kg':
-        includeShipKg = true;
-        break;
-      case 'ship_sam':
-        includeShipSam = true;
-        break;
-      case 'ship_all':
-        includeShipPcs = true;
-        includeShipKg = true;
-        includeShipSam = true;
-        break;
-    }
-
-    const html = generateHTMLTable(includeOps, includeProd, includeShipPcs, includeShipKg, includeShipSam);
+    const html = generateHTMLTemplate(false);
     const blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -437,20 +452,29 @@ export default function ProductionOperationsForm({
     URL.revokeObjectURL(url);
   };
 
-  return (
-    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm print:shadow-none print:p-0">
-      <style dangerouslySetInnerHTML={{__html: `
-        @media print {
-          @page { size: landscape; margin: 10mm; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .no-print { display: none !important; }
-          .print-header { display: block !important; margin-bottom: 20px; text-align: center; }
-          table { width: 100% !important; font-size: 10px !important; }
-          th, td { padding: 4px !important; }
-        }
-      `}} />
+  const handlePrint = () => {
+    const html = generateHTMLTemplate(true);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 500);
+    } else {
+      alert('Please allow pop-ups to print the report.');
+    }
+  };
 
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 no-print">
+  const toggleSection = (key: SectionKey) => {
+    setSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  return (
+    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Production &amp; Operations</h1>
           <div className="flex items-center gap-2 mt-1">
@@ -465,7 +489,7 @@ export default function ProductionOperationsForm({
           {!isViewer && (
             <button
               onClick={handleSave}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
             >
               <Save size={16} /> Save Data ({safeYear})
             </button>
@@ -476,29 +500,15 @@ export default function ProductionOperationsForm({
             </span>
           )}
 
-          <div className="flex items-center rounded-lg border border-slate-300 overflow-hidden bg-white shadow-sm ml-2">
-            <select
-              value={exportMode}
-              onChange={(e) => setExportMode(e.target.value)}
-              className="text-sm px-3 py-2 bg-transparent outline-none border-r border-slate-300"
-            >
-              <option value="all">All Sections (Ops + Prod + All Shipments)</option>
-              <option value="prod_pcs">Factory Operations + Production (pcs)</option>
-              <option value="ship_pcs">Shipment Quantity (pcs) Only</option>
-              <option value="ship_kg">Shipment Quantity (kg) Only</option>
-              <option value="ship_sam">Shipment Quantity (SAM) Only</option>
-              <option value="ship_all">All Shipments (pcs + kg + SAM)</option>
-            </select>
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold transition-colors"
-            >
-              <FileSpreadsheet size={16} /> Download Excel (.xls)
-            </button>
-          </div>
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm ml-2"
+          >
+            <FileSpreadsheet size={16} /> Download Excel (.xls)
+          </button>
 
           <button
-            onClick={() => window.print()}
+            onClick={handlePrint}
             className="flex items-center gap-2 px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold shadow-sm transition-colors ml-2"
           >
             <Printer size={16} /> Print / Save PDF
@@ -506,12 +516,33 @@ export default function ProductionOperationsForm({
         </div>
       </div>
 
-      <div className="hidden print-header">
-        <h1 style={{ color: '#065f46', margin: 0, fontSize: '24px' }}>Epyllion Group</h1>
-        <h2 style={{ margin: '5px 0', fontSize: '18px' }}>{unitInfo.fullName}</h2>
-        <p style={{ margin: 0, fontSize: '12px', color: '#555' }}>{unitInfo.address}</p>
-        <p style={{ margin: '5px 0', fontSize: '14px', fontWeight: 'bold' }}>Production &amp; Operations - {safeYear}</p>
-        <p style={{ margin: '2px 0', fontSize: '12px', fontWeight: 'bold', color: '#065f46' }}>Reporting Year: {safeYear}</p>
+      <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-4 text-sm no-print">
+        <span className="font-semibold text-slate-700 mr-2">Report Columns / Sections to Export &amp; Print:</span>
+        
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" checked={sections.ops} onChange={() => toggleSection('ops')} className="accent-emerald-600 w-4 h-4" />
+          <span>Factory Operations</span>
+        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" checked={sections.prod} onChange={() => toggleSection('prod')} className="accent-blue-600 w-4 h-4" />
+          <span>Production (pcs)</span>
+        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" checked={sections.shipPcs} onChange={() => toggleSection('shipPcs')} className="accent-indigo-600 w-4 h-4" />
+          <span>Shipment (pcs)</span>
+        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" checked={sections.shipKg} onChange={() => toggleSection('shipKg')} className="accent-amber-600 w-4 h-4" />
+          <span>Shipment (kg)</span>
+        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" checked={sections.shipSam} onChange={() => toggleSection('shipSam')} className="accent-orange-600 w-4 h-4" />
+          <span>Shipment (SAM)</span>
+        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" checked={sections.remarks} onChange={() => toggleSection('remarks')} className="accent-gray-600 w-4 h-4" />
+          <span>Remarks</span>
+        </label>
       </div>
 
       {isViewer && (
@@ -525,65 +556,90 @@ export default function ProductionOperationsForm({
           <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-600 font-semibold">
             <tr>
               <th className="px-2 py-2 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 w-24 text-center">Month</th>
-              <th colSpan={7} className="px-2 py-2 bg-emerald-50 text-emerald-800 border-r border-slate-200 text-center font-bold">Group 1: Factory Operations</th>
-              <th colSpan={buyers.length + 1} className="px-2 py-2 bg-blue-50 text-blue-800 border-r border-slate-200 text-center font-bold">
-                Group 2: Production Quantity (pcs)
-              </th>
-              <th colSpan={buyers.length + 1} className="px-2 py-2 bg-indigo-50 text-indigo-800 border-r border-slate-200 text-center font-bold">
-                Group 3: Shipment Quantity (pcs)
-              </th>
-              <th colSpan={buyers.length + 1} className="px-2 py-2 bg-amber-50 text-amber-800 border-r border-slate-200 text-center font-bold">
-                Group 4: Shipment Quantity (kg)
-              </th>
-              <th colSpan={buyers.length + 1} className="px-2 py-2 bg-orange-50 text-orange-800 border-r border-slate-200 text-center font-bold">
-                Group 5: Shipment Quantity (SAM)
-              </th>
-              <th className="px-2 py-2 bg-gray-100 text-gray-800 text-center font-bold">Group 6: Remarks</th>
+              {sections.ops && (
+                <th colSpan={7} className="px-2 py-2 bg-emerald-100 text-emerald-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
+                  Factory Operations
+                </th>
+              )}
+              {sections.prod && (
+                <th colSpan={buyers.length + 1} className="px-2 py-2 bg-blue-100 text-blue-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
+                  Production Quantity (pcs)
+                </th>
+              )}
+              {sections.shipPcs && (
+                <th colSpan={buyers.length + 1} className="px-2 py-2 bg-indigo-100 text-indigo-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
+                  Shipment Quantity (pcs)
+                </th>
+              )}
+              {sections.shipKg && (
+                <th colSpan={buyers.length + 1} className="px-2 py-2 bg-amber-100 text-amber-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
+                  Shipment Quantity (kg)
+                </th>
+              )}
+              {sections.shipSam && (
+                <th colSpan={buyers.length + 1} className="px-2 py-2 bg-orange-100 text-orange-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
+                  Shipment Quantity (SAM)
+                </th>
+              )}
+              {sections.remarks && (
+                <th className="px-2 py-2 bg-gray-100 text-gray-900 text-center font-bold uppercase tracking-wider">
+                  Remarks
+                </th>
+              )}
             </tr>
             
             <tr>
               <th className="px-2 py-2 sticky left-0 bg-slate-50 z-20 border-r border-slate-200"></th>
               
-              <th className="px-2 py-2 text-center whitespace-nowrap">Man Power</th>
-              <th className="px-2 py-2 text-center whitespace-nowrap">Working Days</th>
-              <th className="px-2 py-2 text-center whitespace-nowrap">Available Hour</th>
-              <th className="px-2 py-2 text-center whitespace-nowrap">Produce Hour</th>
-              <th className="px-2 py-2 text-center whitespace-nowrap">Total MTO</th>
-              <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Efficiency (%)</th>
-              <th className="px-2 py-2 text-center whitespace-nowrap border-r border-slate-200">Avg SMV</th>
+              {sections.ops && (
+                <>
+                  <th className="px-2 py-2 text-center whitespace-nowrap">Man Power</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap">Working Days</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap">Available Hour</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap">Produce Hour</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap">Total MTO</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Efficiency (%)</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap border-r border-slate-200">Avg SMV</th>
+                </>
+              )}
 
-              {['prodPcs', 'shipPcs', 'shipKg', 'shipSam'].map((section) => (
-                <React.Fragment key={section}>
-                  {buyers.map((b, bIdx) => (
-                    <th key={b.id} className="px-2 py-1 text-center align-top min-w-[100px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <div className="flex items-center justify-between w-full gap-1">
-                          <input
-                            type="text"
-                            placeholder={`Buyer ${bIdx + 1}`}
-                            value={b.name}
-                            onChange={(e) => updateBuyerName(b.id, e.target.value)}
-                            disabled={isViewer}
-                            className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-emerald-500 disabled:bg-transparent disabled:border-transparent"
-                          />
-                          {!isViewer && buyers.length > 1 && (
-                            <button
-                              onClick={() => removeBuyer(b.id)}
-                              className="text-red-500 hover:text-red-700 no-print"
-                              title="Remove Buyer"
-                            >
-                              <X size={12} />
-                            </button>
-                          )}
+              {(['prod', 'shipPcs', 'shipKg', 'shipSam'] as const).map((secKey) => {
+                if (!sections[secKey]) return null;
+                return (
+                  <React.Fragment key={secKey}>
+                    {buyers.map((b, bIdx) => (
+                      <th key={b.id} className="px-2 py-1 text-center align-top min-w-[100px]">
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="flex items-center justify-between w-full gap-1">
+                            <input
+                              type="text"
+                              placeholder={`Buyer ${bIdx + 1}`}
+                              value={b.name}
+                              onChange={(e) => updateBuyerName(b.id, e.target.value)}
+                              disabled={isViewer}
+                              className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-emerald-500 disabled:bg-transparent disabled:border-transparent"
+                            />
+                            {!isViewer && buyers.length > 1 && (
+                              <button
+                                onClick={() => removeBuyer(b.id)}
+                                className="text-red-500 hover:text-red-700 no-print"
+                                title="Remove Buyer"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </th>
-                  ))}
-                  <th className="px-2 py-2 text-center whitespace-nowrap font-bold bg-slate-100 border-r border-slate-200">Total</th>
-                </React.Fragment>
-              ))}
+                      </th>
+                    ))}
+                    <th className="px-2 py-2 text-center whitespace-nowrap font-bold bg-slate-100 border-r border-slate-200">Total</th>
+                  </React.Fragment>
+                );
+              })}
 
-              <th className="px-2 py-2 text-center align-top min-w-[150px]"></th>
+              {sections.remarks && (
+                <th className="px-2 py-2 text-center align-top min-w-[150px]"></th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -593,45 +649,44 @@ export default function ProductionOperationsForm({
                 <tr key={month} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
                   <td className="px-2 py-1 font-semibold text-slate-700 sticky left-0 bg-inherit z-10 border-r border-slate-200">{month}</td>
                   
-                  <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.manPower} onChange={(e) => updateMonthField(month, 'manPower', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                  <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.workingDays} onChange={(e) => updateMonthField(month, 'workingDays', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                  <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.availableHour} onChange={(e) => updateMonthField(month, 'availableHour', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                  <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.produceHour} onChange={(e) => updateMonthField(month, 'produceHour', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                  <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.totalMTO} onChange={(e) => updateMonthField(month, 'totalMTO', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                  <td className="px-2 py-1 text-right font-medium text-emerald-700 bg-emerald-50/30">{getEfficiency(row)}</td>
-                  <td className="px-1 py-1 border-r border-slate-200"><input type="text" inputMode="decimal" value={row.averageSMV} onChange={(e) => updateMonthField(month, 'averageSMV', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
+                  {sections.ops && (
+                    <>
+                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.manPower} onChange={(e) => updateMonthField(month, 'manPower', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
+                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.workingDays} onChange={(e) => updateMonthField(month, 'workingDays', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
+                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.availableHour} onChange={(e) => updateMonthField(month, 'availableHour', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
+                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.produceHour} onChange={(e) => updateMonthField(month, 'produceHour', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
+                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.totalMTO} onChange={(e) => updateMonthField(month, 'totalMTO', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
+                      <td className="px-2 py-1 text-right font-medium text-emerald-700 bg-emerald-50/30">{getEfficiency(row)}</td>
+                      <td className="px-1 py-1 border-r border-slate-200"><input type="text" inputMode="decimal" value={row.averageSMV} onChange={(e) => updateMonthField(month, 'averageSMV', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
+                    </>
+                  )}
 
-                  {buyers.map(b => (
-                    <td key={`${month}-prod-${b.id}`} className="px-1 py-1">
-                      <input type="text" inputMode="decimal" value={row.prodPcs?.[b.id] || ''} onChange={(e) => updateBuyerQty(month, 'prodPcs', b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                  {(['prod', 'shipPcs', 'shipKg', 'shipSam'] as const).map((secKey) => {
+                    if (!sections[secKey]) return null;
+                    const dataKey = secKey === 'prod' ? 'prodPcs' : secKey;
+                    const colorClass = 
+                      secKey === 'prod' ? 'text-blue-700 bg-blue-50/30' : 
+                      secKey === 'shipPcs' ? 'text-indigo-700 bg-indigo-50/30' : 
+                      secKey === 'shipKg' ? 'text-amber-700 bg-amber-50/30' : 
+                      'text-orange-700 bg-orange-50/30';
+
+                    return (
+                      <React.Fragment key={secKey}>
+                        {buyers.map(b => (
+                          <td key={`${month}-${secKey}-${b.id}`} className="px-1 py-1">
+                            <input type="text" inputMode="decimal" value={row[dataKey]?.[b.id] || ''} onChange={(e) => updateBuyerQty(month, dataKey, b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                          </td>
+                        ))}
+                        <td className={`px-2 py-1 text-right font-bold ${colorClass} border-r border-slate-200`}>{fmt(getSectionTotal(row, dataKey))}</td>
+                      </React.Fragment>
+                    );
+                  })}
+
+                  {sections.remarks && (
+                    <td className="px-1 py-1">
+                      <input type="text" value={row.remarks} onChange={(e) => updateMonthField(month, 'remarks', e.target.value)} disabled={isViewer} className="w-full min-w-[120px] px-2 py-1 border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" placeholder="Notes..." />
                     </td>
-                  ))}
-                  <td className="px-2 py-1 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-slate-200">{fmt(getSectionTotal(row, 'prodPcs'))}</td>
-
-                  {buyers.map(b => (
-                    <td key={`${month}-shippcs-${b.id}`} className="px-1 py-1">
-                      <input type="text" inputMode="decimal" value={row.shipPcs?.[b.id] || ''} onChange={(e) => updateBuyerQty(month, 'shipPcs', b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
-                    </td>
-                  ))}
-                  <td className="px-2 py-1 text-right font-bold text-indigo-700 bg-indigo-50/30 border-r border-slate-200">{fmt(getSectionTotal(row, 'shipPcs'))}</td>
-
-                  {buyers.map(b => (
-                    <td key={`${month}-shipkg-${b.id}`} className="px-1 py-1">
-                      <input type="text" inputMode="decimal" value={row.shipKg?.[b.id] || ''} onChange={(e) => updateBuyerQty(month, 'shipKg', b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
-                    </td>
-                  ))}
-                  <td className="px-2 py-1 text-right font-bold text-amber-700 bg-amber-50/30 border-r border-slate-200">{fmt(getSectionTotal(row, 'shipKg'))}</td>
-
-                  {buyers.map(b => (
-                    <td key={`${month}-shipsam-${b.id}`} className="px-1 py-1">
-                      <input type="text" inputMode="decimal" value={row.shipSam?.[b.id] || ''} onChange={(e) => updateBuyerQty(month, 'shipSam', b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
-                    </td>
-                  ))}
-                  <td className="px-2 py-1 text-right font-bold text-orange-700 bg-orange-50/30 border-r border-slate-200">{fmt(getSectionTotal(row, 'shipSam'))}</td>
-
-                  <td className="px-1 py-1">
-                    <input type="text" value={row.remarks} onChange={(e) => updateMonthField(month, 'remarks', e.target.value)} disabled={isViewer} className="w-full min-w-[120px] px-2 py-1 border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" placeholder="Notes..." />
-                  </td>
+                  )}
                 </tr>
               );
             })}
@@ -640,35 +695,46 @@ export default function ProductionOperationsForm({
             <tr>
               <td className="px-2 py-2 sticky left-0 bg-slate-100 z-10 border-r border-slate-300">Total</td>
               
-              <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('manPower'))}</td>
-              <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('workingDays'))}</td>
-              <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('availableHour'))}</td>
-              <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('produceHour'))}</td>
-              <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('totalMTO'))}</td>
-              <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{getAvgEfficiency()}</td>
-              <td className="px-2 py-2 text-right border-r border-slate-300 text-slate-400">-</td>
+              {sections.ops && (
+                <>
+                  <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('manPower'))}</td>
+                  <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('workingDays'))}</td>
+                  <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('availableHour'))}</td>
+                  <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('produceHour'))}</td>
+                  <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('totalMTO'))}</td>
+                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{getAvgEfficiency()}</td>
+                  <td className="px-2 py-2 text-right border-r border-slate-300 text-slate-400">-</td>
+                </>
+              )}
 
-              {buyers.map(b => (
-                <td key={`total-prod-${b.id}`} className="px-2 py-2 text-right text-blue-800">{fmt(getBuyerYearTotal(b.id, 'prodPcs'))}</td>
-              ))}
-              <td className="px-2 py-2 text-right text-blue-900 bg-blue-100/50 border-r border-slate-300">{fmt(getColumnYearTotal('prodPcs'))}</td>
+              {(['prod', 'shipPcs', 'shipKg', 'shipSam'] as const).map((secKey) => {
+                if (!sections[secKey]) return null;
+                const dataKey = secKey === 'prod' ? 'prodPcs' : secKey;
+                const colorClass = 
+                  secKey === 'prod' ? 'text-blue-800' : 
+                  secKey === 'shipPcs' ? 'text-indigo-800' : 
+                  secKey === 'shipKg' ? 'text-amber-800' : 
+                  'text-orange-800';
 
-              {buyers.map(b => (
-                <td key={`total-shippcs-${b.id}`} className="px-2 py-2 text-right text-indigo-800">{fmt(getBuyerYearTotal(b.id, 'shipPcs'))}</td>
-              ))}
-              <td className="px-2 py-2 text-right text-indigo-900 bg-indigo-100/50 border-r border-slate-300">{fmt(getColumnYearTotal('shipPcs'))}</td>
+                const bgClass = 
+                  secKey === 'prod' ? 'bg-blue-100/50' : 
+                  secKey === 'shipPcs' ? 'bg-indigo-100/50' : 
+                  secKey === 'shipKg' ? 'bg-amber-100/50' : 
+                  'bg-orange-100/50';
 
-              {buyers.map(b => (
-                <td key={`total-shipkg-${b.id}`} className="px-2 py-2 text-right text-amber-800">{fmt(getBuyerYearTotal(b.id, 'shipKg'))}</td>
-              ))}
-              <td className="px-2 py-2 text-right text-amber-900 bg-amber-100/50 border-r border-slate-300">{fmt(getColumnYearTotal('shipKg'))}</td>
+                return (
+                  <React.Fragment key={secKey}>
+                    {buyers.map(b => (
+                      <td key={`total-${secKey}-${b.id}`} className={`px-2 py-2 text-right ${colorClass}`}>{fmt(getBuyerYearTotal(b.id, dataKey))}</td>
+                    ))}
+                    <td className={`px-2 py-2 text-right ${colorClass} ${bgClass} border-r border-slate-300`}>{fmt(getColumnYearTotal(dataKey))}</td>
+                  </React.Fragment>
+                );
+              })}
 
-              {buyers.map(b => (
-                <td key={`total-shipsam-${b.id}`} className="px-2 py-2 text-right text-orange-800">{fmt(getBuyerYearTotal(b.id, 'shipSam'))}</td>
-              ))}
-              <td className="px-2 py-2 text-right text-orange-900 bg-orange-100/50 border-r border-slate-300">{fmt(getColumnYearTotal('shipSam'))}</td>
-
-              <td className="px-2 py-2 text-right text-slate-400">-</td>
+              {sections.remarks && (
+                <td className="px-2 py-2 text-right text-slate-400">-</td>
+              )}
             </tr>
           </tfoot>
         </table>
