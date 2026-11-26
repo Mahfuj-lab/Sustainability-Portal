@@ -948,7 +948,8 @@ const App: React.FC = () => {
               selectedUnit={factory}
               unitFullName={UNIT_FULL_NAMES[factory] || factory}
               userRole={user?.role || 'viewer'}
-              restGet={(path: string) => restGet('factory_profile', path.replace(/\//g, '_'))}
+                            restGet={(path: string) => restGet('factory_profile/' + path.replace(/\//g, '_'))}
+
               restSet={(path: string, data: any) => restSet('factory_profile', path.replace(/\//g, '_'), data)}
             />
           )}
