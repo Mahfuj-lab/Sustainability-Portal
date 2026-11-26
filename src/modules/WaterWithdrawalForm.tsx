@@ -1,998 +1,1280 @@
-import React, { useState, useEffect } from 'react';
-import { Save, Plus, X, Printer, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
-import { UNIT_DIRECTORY } from '../utils/unitDirectory';
+// src/modules/WaterWithdrawalForm.tsx
+import React, { useEffect, useMemo, useState } from 'react';
 
-export interface WaterWithdrawalFormProps {
-  selectedUnit: string;
-  selectedYear: string;
-  userRole?: string;
-  [key: string]: any;
-}
+/* =========================================================================
+   TYPES
+   ========================================================================= */
+type MeterKey = 'municipal' | 'ground' | 'reuse';
+type GroupKey = 'municipal' | 'ground' | 'total' | 'reuse' | 'rain' | 'discharge';
+type ScalarField =
+  | 'mDomestic'
+  | 'mProduction'
+  | 'gDomestic'
+  | 'gProduction'
+  | 'condensate'
+  | 'rainCollect'
+  | 'rainUse'
+  | 'boiler';
+type DiagramMode = 'all' | 'core' | 'custom';
 
-interface MeterItem {
-  id: string;
-  name: string;
-}
-
-interface MonthData {
-  municipalValues: Record<string, string>;
-  municipalDomestic: string;
-  municipalProduction: string;
-  groundValues: Record<string, string>;
-  groundDomestic: string;
-  groundProduction: string;
-  reuseValues: Record<string, string>;
-  condensateRecovery: string;
+interface MonthEntry {
+  municipal: string[];
+  mDomestic: string;
+  mProduction: string;
+  ground: string[];
+  gDomestic: string;
+  gProduction: string;
+  reuse: string[];
+  condensate: string;
   rainCollect: string;
   rainUse: string;
-  boilerBlowdown: string;
+  boiler: string;
   remarks: string;
 }
 
-type FormData = Record<string, MonthData>;
+interface MeterNames {
+  municipal: string[];
+  ground: string[];
+  reuse: string[];
+}
 
+interface FormData {
+  names: MeterNames;
+  months: MonthEntry[];
+}
+
+interface Calc {
+  totMun: number;
+  totGnd: number;
+  grand: number;
+  totDom: number;
+  totProd: number;
+  totReuse: number;
+  domLoss: number;
+  discharge: number;
+}
+
+interface Col {
+  id: string;
+  label: string;
+  sub?: string;
+  kind: 'input' | 'calc';
+  meter?: { key: MeterKey; idx: number };
+  num: (m: MonthEntry, c: Calc) => number;
+  raw?: (m: MonthEntry) => string;
+  set?: (m: MonthEntry, v: string) => MonthEntry;
+}
+
+interface GroupDef {
+  key: GroupKey;
+  title: string;
+  cols: Col[];
+  addKey?: MeterKey;
+  addLabel?: string;
+}
+
+interface Agg {
+  municipal: number[];
+  ground: number[];
+  reuse: number[];
+  mDomestic: number;
+  mProduction: number;
+  gDomestic: number;
+  gProduction: number;
+  condensate: number;
+  rainCollect: number;
+  rainUse: number;
+  boiler: number;
+  count: number;
+  first: number;
+  last: number;
+}
+
+interface Theme {
+  head: string;
+  cell: string;
+  lock: string;
+  text: string;
+  border: string;
+}
+
+export interface WaterWithdrawalFormProps {
+  selectedUnit?: string;
+  selectedYear?: number | string;
+  companyName?: string;
+}
+
+/* =========================================================================
+   CONSTANTS & HELPERS
+   ========================================================================= */
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
+const SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const n = (val: any): number => {
-  const num = parseFloat(val);
-  return isNaN(num) ? 0 : num;
+const NUM_RE = /^\d*\.?\d{0,2}$/;
+
+const GROUP_KEYS: GroupKey[] = ['municipal', 'ground', 'total', 'reuse', 'rain', 'discharge'];
+
+const GROUP_LABELS: Record<GroupKey, string> = {
+  municipal: 'Municipal Water',
+  ground: 'Ground Water',
+  total: 'Total Water Extraction',
+  reuse: 'Water Reuse',
+  rain: 'Rainwater Harvesting',
+  discharge: 'Water Discharge',
 };
 
-const fmt = (val: number, decimals: number = 2): string => {
-  return val.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+const THEMES: Record<GroupKey, Theme> = {
+  municipal: { head: '#FEF3C7', cell: '#FFFBEB', lock: '#FDE9A8', text: '#92400E', border: '#F6C453' },
+  ground: { head: '#E0F2FE', cell: '#F0F9FF', lock: '#CDE9FB', text: '#075985', border: '#7CC4EE' },
+  total: { head: '#D1FAE5', cell: '#ECFDF5', lock: '#BFEBD6', text: '#065F46', border: '#6EDBA8' },
+  reuse: { head: '#CCFBF1', cell: '#F0FDFA', lock: '#B5EFE7', text: '#115E59', border: '#5ED6C6' },
+  rain: { head: '#E0E7FF', cell: '#EEF2FF', lock: '#D2D9FB', text: '#3730A3', border: '#A5B4FC' },
+  discharge: { head: '#FFE4E6', cell: '#FFF1F2', lock: '#FDD0D6', text: '#9F1239', border: '#FDA4AF' },
 };
 
-const getEmptyMonth = (): MonthData => ({
-  municipalValues: {},
-  municipalDomestic: '',
-  municipalProduction: '',
-  groundValues: {},
-  groundDomestic: '',
-  groundProduction: '',
-  reuseValues: {},
-  condensateRecovery: '',
+const toNum = (s: string | undefined): number => {
+  const v = parseFloat(s === undefined ? '' : s);
+  return Number.isFinite(v) ? v : 0;
+};
+const sumArr = (a: number[]): number => a.reduce((x, y) => x + y, 0);
+const fix2 = (n: number): string => (Number.isFinite(n) ? n : 0).toFixed(2);
+const fmt = (n: number): string =>
+  (Number.isFinite(n) ? n : 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+const esc = (s: string): string =>
+  String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+const str = (v: unknown): string => {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  return '';
+};
+
+const emptyMonth = (nM: number, nG: number, nR: number): MonthEntry => ({
+  municipal: new Array<string>(nM).fill(''),
+  mDomestic: '',
+  mProduction: '',
+  ground: new Array<string>(nG).fill(''),
+  gDomestic: '',
+  gProduction: '',
+  reuse: new Array<string>(nR).fill(''),
+  condensate: '',
   rainCollect: '',
   rainUse: '',
-  boilerBlowdown: '',
+  boiler: '',
   remarks: '',
 });
 
-const getUnitInfo = (code: string) => {
-  const fallback = { fullName: code || 'Unknown Unit', address: 'Dhaka, Bangladesh' };
-  if (!code) return fallback;
+const makeDefault = (): FormData => ({
+  names: {
+    municipal: ['Meter 1', 'Meter 2'],
+    ground: ['Meter 1', 'Meter 2'],
+    reuse: ['Meter 1 (m³)', 'Meter 2 (m³)'],
+  },
+  months: MONTHS.map(() => emptyMonth(2, 2, 2)),
+});
 
-  try {
-    const dir = UNIT_DIRECTORY as any;
-    if (Array.isArray(dir)) {
-      const found = dir.find((u: any) => u && (u.code === code || u.id === code));
-      if (found) {
-        return {
-          fullName: found.fullName || found.name || code,
-          address: found.address || 'Dhaka, Bangladesh',
-        };
-      }
-    } else if (dir && typeof dir === 'object') {
-      const found = dir[code];
-      if (found) {
-        return {
-          fullName: found.fullName || found.name || code,
-          address: found.address || 'Dhaka, Bangladesh',
-        };
-      }
-    }
-  } catch (e) {
-    console.error('UNIT_DIRECTORY lookup failed', e);
+const readStrArr = (v: unknown, len: number): string[] => {
+  const a = Array.isArray(v) ? (v as unknown[]) : [];
+  const out: string[] = [];
+  for (let i = 0; i < len; i++) out.push(str(a[i]));
+  return out;
+};
+
+const readNames = (v: unknown, fallback: (i: number) => string): string[] => {
+  const a = Array.isArray(v) ? (v as unknown[]) : [];
+  const len = Math.max(1, Math.min(a.length === 0 ? 2 : a.length, 30));
+  const out: string[] = [];
+  for (let i = 0; i < len; i++) {
+    const s = str(a[i]);
+    out.push(s.trim() === '' ? fallback(i) : s);
   }
-  return fallback;
+  return out;
 };
 
-const isValidNumber = (val: string): boolean => {
-  if (val === '') return true;
-  return /^\d*(\.\d{0,2})?$/.test(val);
+const normalize = (raw: unknown): FormData => {
+  try {
+    const obj: Record<string, unknown> =
+      raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    const nr: Record<string, unknown> =
+      obj.names && typeof obj.names === 'object' ? (obj.names as Record<string, unknown>) : {};
+    const names: MeterNames = {
+      municipal: readNames(nr.municipal, (i) => `Meter ${i + 1}`),
+      ground: readNames(nr.ground, (i) => `Meter ${i + 1}`),
+      reuse: readNames(nr.reuse, (i) => `Meter ${i + 1} (m³)`),
+    };
+    const mr: unknown[] = Array.isArray(obj.months) ? (obj.months as unknown[]) : [];
+    const months: MonthEntry[] = [];
+    for (let i = 0; i < 12; i++) {
+      const item = mr[i];
+      const rec: Record<string, unknown> =
+        item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+      months.push({
+        municipal: readStrArr(rec.municipal, names.municipal.length),
+        mDomestic: str(rec.mDomestic),
+        mProduction: str(rec.mProduction),
+        ground: readStrArr(rec.ground, names.ground.length),
+        gDomestic: str(rec.gDomestic),
+        gProduction: str(rec.gProduction),
+        reuse: readStrArr(rec.reuse, names.reuse.length),
+        condensate: str(rec.condensate),
+        rainCollect: str(rec.rainCollect),
+        rainUse: str(rec.rainUse),
+        boiler: str(rec.boiler),
+        remarks: str(rec.remarks),
+      });
+    }
+    return { names, months };
+  } catch (e) {
+    return makeDefault();
+  }
 };
 
-export default function WaterWithdrawalForm({
+const loadData = (key: string): FormData => {
+  try {
+    if (typeof window === 'undefined') return makeDefault();
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return makeDefault();
+    return normalize(JSON.parse(raw));
+  } catch (e) {
+    return makeDefault();
+  }
+};
+
+const SCALARS: ScalarField[] = [
+  'mDomestic',
+  'mProduction',
+  'gDomestic',
+  'gProduction',
+  'condensate',
+  'rainCollect',
+  'rainUse',
+  'boiler',
+];
+
+const hasData = (m: MonthEntry): boolean =>
+  m.municipal.some((v) => v !== '') ||
+  m.ground.some((v) => v !== '') ||
+  m.reuse.some((v) => v !== '') ||
+  SCALARS.some((f) => m[f] !== '');
+
+const calcMonth = (m: MonthEntry): Calc => {
+  const totMun = sumArr(m.municipal.map(toNum));
+  const totGnd = sumArr(m.ground.map(toNum));
+  const totDom = toNum(m.mDomestic) + toNum(m.gDomestic);
+  const totProd = toNum(m.mProduction) + toNum(m.gProduction);
+  const totReuse = sumArr(m.reuse.map(toNum)) + toNum(m.condensate);
+  const domLoss = totDom * 0.1;
+  const discharge = totDom - domLoss + toNum(m.boiler);
+  return { totMun, totGnd, grand: totMun + totGnd, totDom, totProd, totReuse, domLoss, discharge };
+};
+
+/* ---------- Column / group definitions (single source of truth) ---------- */
+const buildGroups = (names: MeterNames): GroupDef[] => {
+  const meterCols = (key: MeterKey): Col[] =>
+    names[key].map((nm, i) => ({
+      id: `${key}-${i}`,
+      label: nm,
+      kind: 'input' as const,
+      meter: { key, idx: i },
+      raw: (m: MonthEntry) => (m[key][i] === undefined ? '' : m[key][i]),
+      set: (m: MonthEntry, v: string) =>
+        ({ ...m, [key]: m[key].map((x, k) => (k === i ? v : x)) } as MonthEntry),
+      num: (m: MonthEntry) => toNum(m[key][i]),
+    }));
+
+  const inp = (id: string, label: string, field: ScalarField): Col => ({
+    id,
+    label,
+    kind: 'input',
+    raw: (m) => m[field],
+    set: (m, v) => ({ ...m, [field]: v } as MonthEntry),
+    num: (m) => toNum(m[field]),
+  });
+
+  const calc = (id: string, label: string, fn: (c: Calc) => number, sub?: string): Col => ({
+    id,
+    label,
+    sub,
+    kind: 'calc',
+    num: (_m, c) => fn(c),
+  });
+
+  return [
+    {
+      key: 'municipal',
+      title: 'MUNICIPAL WATER (m³)',
+      addKey: 'municipal',
+      addLabel: '+ Add Municipal Meter',
+      cols: [
+        ...meterCols('municipal'),
+        calc('totMun', 'Total Municipal (m³)', (c) => c.totMun),
+        inp('mDom', 'Domestic (m³)', 'mDomestic'),
+        inp('mProd', 'Production (m³)', 'mProduction'),
+      ],
+    },
+    {
+      key: 'ground',
+      title: 'GROUND WATER (m³)',
+      addKey: 'ground',
+      addLabel: '+ Add Ground Water Meter',
+      cols: [
+        ...meterCols('ground'),
+        calc('totGnd', 'Total Ground Water (m³)', (c) => c.totGnd),
+        inp('gDom', 'Domestic (m³)', 'gDomestic'),
+        inp('gProd', 'Production (m³)', 'gProduction'),
+      ],
+    },
+    {
+      key: 'total',
+      title: 'TOTAL WATER EXTRACTION (m³)',
+      cols: [
+        calc('grand', 'Grand Total (m³)', (c) => c.grand),
+        calc('totDom', 'Total Domestic (m³)', (c) => c.totDom),
+        calc('totProd', 'Total Production (m³)', (c) => c.totProd),
+      ],
+    },
+    {
+      key: 'reuse',
+      title: 'WATER REUSE (m³)',
+      addKey: 'reuse',
+      addLabel: '+ Add Reuse Meter',
+      cols: [
+        ...meterCols('reuse'),
+        inp('cond', 'Condensate Recovery (m³)', 'condensate'),
+        calc('totReuse', 'Total Reuse (m³)', (c) => c.totReuse),
+      ],
+    },
+    {
+      key: 'rain',
+      title: 'RAINWATER HARVESTING (m³)',
+      cols: [inp('rainC', 'Collect (m³)', 'rainCollect'), inp('rainU', 'Use (m³)', 'rainUse')],
+    },
+    {
+      key: 'discharge',
+      title: 'WATER DISCHARGE (m³)',
+      cols: [
+        calc('domLoss', 'Domestic Water Loss (m³)', (c) => c.domLoss, '(Total Domestic Water - 10%)'),
+        inp('boiler', 'Boiler Blowdown Water (m³)', 'boiler'),
+        calc(
+          'discharge',
+          'Total Discharge Water (m³)',
+          (c) => c.discharge,
+          '(Discharge = Domestic Water - 10% of Domestic + Boiler Blowdown)'
+        ),
+      ],
+    },
+  ];
+};
+
+/* ---------- Aggregation for the diagram ---------- */
+const aggregate = (d: FormData): Agg => {
+  const agg: Agg = {
+    municipal: new Array<number>(d.names.municipal.length).fill(0),
+    ground: new Array<number>(d.names.ground.length).fill(0),
+    reuse: new Array<number>(d.names.reuse.length).fill(0),
+    mDomestic: 0,
+    mProduction: 0,
+    gDomestic: 0,
+    gProduction: 0,
+    condensate: 0,
+    rainCollect: 0,
+    rainUse: 0,
+    boiler: 0,
+    count: 0,
+    first: -1,
+    last: -1,
+  };
+  d.months.forEach((m, i) => {
+    if (!hasData(m)) return;
+    agg.count += 1;
+    if (agg.first < 0) agg.first = i;
+    agg.last = i;
+    m.municipal.forEach((v, j) => {
+      if (j < agg.municipal.length) agg.municipal[j] += toNum(v);
+    });
+    m.ground.forEach((v, j) => {
+      if (j < agg.ground.length) agg.ground[j] += toNum(v);
+    });
+    m.reuse.forEach((v, j) => {
+      if (j < agg.reuse.length) agg.reuse[j] += toNum(v);
+    });
+    agg.mDomestic += toNum(m.mDomestic);
+    agg.mProduction += toNum(m.mProduction);
+    agg.gDomestic += toNum(m.gDomestic);
+    agg.gProduction += toNum(m.gProduction);
+    agg.condensate += toNum(m.condensate);
+    agg.rainCollect += toNum(m.rainCollect);
+    agg.rainUse += toNum(m.rainUse);
+    agg.boiler += toNum(m.boiler);
+  });
+  return agg;
+};
+
+const periodText = (agg: Agg, year: string): string => {
+  if (agg.count === 0) return `Aggregated Period: No data entered ${year} (m³)`;
+  if (agg.first === agg.last) return `Aggregated Period: ${SHORT[agg.first]} ${year} (m³)`;
+  return `Aggregated Period: ${SHORT[agg.first]} – ${SHORT[agg.last]} ${year} (m³)`;
+};
+
+/* =========================================================================
+   WATER BALANCE DIAGRAM (SVG STRING - shared by screen & print)
+   ========================================================================= */
+const PIPE_COLORS: Record<string, string> = {
+  mun: '#2563EB',
+  gnd: '#0891B2',
+  dom: '#1D4ED8',
+  rain: '#16A34A',
+  reuse: '#0D9488',
+  loss: '#DC2626',
+  blow: '#D97706',
+  ww: '#2563EB',
+};
+
+interface DiagramLine {
+  t: string;
+  s?: number;
+  b?: boolean;
+  c?: string;
+}
+
+const buildDiagramSvg = (
+  agg: Agg,
+  names: MeterNames,
+  opts: { rain: boolean; reuse: boolean },
+  animated: boolean,
+  label: string
+): string => {
+  const nM = names.municipal.length;
+  const nG = names.ground.length;
+  const totMun = sumArr(agg.municipal);
+  const totGnd = sumArr(agg.ground);
+  const totDom = agg.mDomestic + agg.gDomestic;
+  const totProd = agg.mProduction + agg.gProduction;
+  const loss = totDom * 0.1;
+  const ww = totDom - loss;
+  const discharge = ww + agg.boiler;
+  const totReuse = sumArr(agg.reuse) + agg.condensate;
+  const altSources = (opts.rain ? agg.rainUse : 0) + (opts.reuse ? totReuse : 0);
+
+  const W = 1280;
+  const STEP = 60;
+  const BH = 46;
+  const bm = nM * STEP - 14;
+  const bg = nG * STEP - 14;
+  const yM = Math.max(bm / 2 + 60, 165);
+  const mTop = yM - bm / 2;
+  const yG = Math.max(mTop + bm + 40 + bg / 2, yM + 190);
+  const gTop = yG - bg / 2;
+  const anyExtra = opts.rain || opts.reuse;
+  const nodesEnd = yG + 107 + (opts.rain ? 70 : 0) + (opts.reuse ? 70 : 0);
+  const H = Math.max(anyExtra ? nodesEnd + 20 : yG + 120, gTop + bg + 30);
+
+  const boxes: string[] = [];
+  const pipes: string[] = [];
+  const labels: string[] = [];
+
+  const box = (
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    fill: string,
+    stroke: string,
+    lines: DiagramLine[],
+    dashed?: boolean
+  ): void => {
+    const gap = 4;
+    const total = lines.reduce((a, l) => a + (l.s === undefined ? 11 : l.s) + gap, 0) - gap;
+    let cy = y + (h - total) / 2;
+    let out = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="1.5"${
+      dashed ? ' stroke-dasharray="5 4"' : ''
+    }/>`;
+    lines.forEach((l) => {
+      const s = l.s === undefined ? 11 : l.s;
+      const max = Math.max(4, Math.floor((w - 12) / (s * 0.5)));
+      const t = l.t.length > max ? l.t.slice(0, max - 1) + '…' : l.t;
+      out += `<text x="${x + w / 2}" y="${(cy + s * 0.85).toFixed(1)}" text-anchor="middle" font-size="${s}" font-weight="${
+        l.b ? 700 : 400
+      }" fill="${l.c || '#1F2937'}">${esc(t)}</text>`;
+      cy += s + gap;
+    });
+    boxes.push(out);
+  };
+
+  const pipe = (d: string, key: string, isLoss?: boolean): void => {
+    const col = PIPE_COLORS[key] || '#2563EB';
+    pipes.push(
+      `<path d="${d}" fill="none" stroke="${col}" stroke-opacity="0.16" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>` +
+        `<path d="${d}" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" class="${
+          isLoss ? 'wb-loss' : 'wb-flow'
+        }" marker-end="url(#wb-ar-${key})"/>`
+    );
+  };
+
+  const lbl = (x: number, y: number, t: string, size: number, bold: boolean, anchor: string, fill: string): void => {
+    labels.push(
+      `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${size}" font-weight="${
+        bold ? 700 : 400
+      }" fill="${fill}" class="wb-halo">${esc(t)}</text>`
+    );
+  };
+
+  /* ----- Left stage: meters -> reservoirs ----- */
+  names.municipal.forEach((nm, i) => {
+    const y = mTop + i * STEP;
+    const cy = y + BH / 2;
+    box(20, y, 150, BH, '#EFF6FF', '#2563EB', [
+      { t: nm, s: 11, b: true, c: '#1E40AF' },
+      { t: `${fmt(agg.municipal[i] || 0)} m³`, s: 12 },
+    ]);
+    const endY = yM + (i - (nM - 1) / 2) * 8;
+    pipe(`M170 ${cy} C 205 ${cy}, 205 ${endY}, 240 ${endY}`, 'mun');
+  });
+  names.ground.forEach((nm, i) => {
+    const y = gTop + i * STEP;
+    const cy = y + BH / 2;
+    box(20, y, 150, BH, '#ECFEFF', '#0891B2', [
+      { t: nm, s: 11, b: true, c: '#155E75' },
+      { t: `${fmt(agg.ground[i] || 0)} m³`, s: 12 },
+    ]);
+    const endY = yG + (i - (nG - 1) / 2) * 8;
+    pipe(`M170 ${cy} C 205 ${cy}, 205 ${endY}, 240 ${endY}`, 'gnd');
+  });
+
+  box(240, yM - 50, 180, 100, '#DBEAFE', '#2563EB', [
+    { t: 'Municipal Water Reservoir', s: 11, b: true, c: '#1E3A8A' },
+    { t: 'Total Municipal (m³)', s: 10 },
+    { t: fmt(totMun), s: 15, b: true, c: '#1E40AF' },
+  ]);
+  box(240, yG - 55, 180, 110, '#CFFAFE', '#0891B2', [
+    { t: 'Ground Water Reservoir', s: 11, b: true, c: '#164E63' },
+    { t: 'Total Ground Water (m³)', s: 10 },
+    { t: fmt(totGnd), s: 15, b: true, c: '#0E7490' },
+  ]);
+
+  /* ----- Middle stage ----- */
+  box(520, yM - 50, 180, 100, '#E0F2FE', '#1D4ED8', [
+    { t: 'Domestic Use', s: 12, b: true, c: '#1E3A8A' },
+    { t: 'Total Domestic Use (m³)', s: 10 },
+    { t: fmt(totDom), s: 15, b: true, c: '#1D4ED8' },
+    { t: `Mun ${fmt(agg.mDomestic)} + Gnd ${fmt(agg.gDomestic)}`, s: 9, c: '#475569' },
+  ]);
+
+  // Municipal -> Domestic (100% direct)
+  pipe(`M420 ${yM} H520`, 'mun');
+  lbl(470, yM - 10, 'Municipal Domestic', 9, false, 'middle', '#1E40AF');
+  lbl(470, yM + 20, `${fmt(agg.mDomestic)} m³`, 10, true, 'middle', '#1E40AF');
+
+  // Ground -> Domestic (pipe 2)
+  pipe(`M420 ${yG - 25} H620 V${yM + 50}`, 'gnd');
+  lbl(520, yG - 50, 'Ground Water Total - Boiler Water', 10, false, 'middle', '#155E75');
+  lbl(520, yG - 36, `${fmt(agg.gDomestic)} m³`, 11, true, 'middle', '#155E75');
+
+  // Ground -> Boiler sub-meter -> Production (pipe 1)
+  pipe(`M420 ${yG + 25} H520`, 'gnd');
+  box(520, yG + 1, 180, 48, '#FFFBEB', '#D97706', [
+    { t: 'Boiler Water Sub-Meter', s: 10, b: true, c: '#92400E' },
+    { t: `${fmt(agg.gProduction)} m³`, s: 12 },
+  ]);
+  pipe(`M700 ${yG + 25} H800`, 'gnd');
+
+  box(800, yG - 25, 170, 100, '#FEF3C7', '#D97706', [
+    { t: 'Production / Boiler Use', s: 11, b: true, c: '#92400E' },
+    { t: 'Total Production (m³)', s: 10 },
+    { t: fmt(totProd), s: 15, b: true, c: '#B45309' },
+    ...(altSources > 0
+      ? [{ t: `+ Alt. sources: ${fmt(altSources)}`, s: 9, c: '#475569' } as DiagramLine]
+      : []),
+  ]);
+
+  // Municipal production (only drawn when data exists, keeps the balance honest)
+  if (agg.mProduction > 0) {
+    pipe(`M330 ${yM + 50} V${yM + 105} H885 V${yG - 25}`, 'mun');
+    lbl(345, yM + 98, `Municipal Production: ${fmt(agg.mProduction)} m³`, 9, false, 'start', '#1E40AF');
+  }
+
+  /* ----- Rainwater & Reuse ----- */
+  let slotY = yG + 107;
+  if (opts.rain) {
+    box(520, slotY, 180, 56, '#DCFCE7', '#16A34A', [
+      { t: 'Rainwater Use', s: 11, b: true, c: '#166534' },
+      { t: `${fmt(agg.rainUse)} m³`, s: 12 },
+      { t: `Collected: ${fmt(agg.rainCollect)} m³`, s: 9, c: '#475569' },
+    ]);
+    pipe(`M700 ${slotY + 28} H850 V${yG + 75}`, 'rain');
+    slotY += 70;
+  }
+  if (opts.reuse) {
+    box(520, slotY, 180, 56, '#CCFBF1', '#0D9488', [
+      { t: 'Total Reuse + Condensate', s: 11, b: true, c: '#115E59' },
+      { t: `${fmt(totReuse)} m³`, s: 12 },
+      { t: `Reuse ${fmt(sumArr(agg.reuse))} + Cond. ${fmt(agg.condensate)}`, s: 9, c: '#475569' },
+    ]);
+    pipe(`M700 ${slotY + 28} H920 V${yG + 75}`, 'reuse');
+  }
+
+  /* ----- Right stage: loss, wastewater, discharge ----- */
+  // Branch A: 10% loss (dashed)
+  pipe(`M700 ${yM - 20} H750 V${yM - 80} H800`, 'loss', true);
+  box(
+    800,
+    yM - 110,
+    200,
+    60,
+    '#FEE2E2',
+    '#DC2626',
+    [
+      { t: '10% Domestic Loss (m³)', s: 11, b: true, c: '#991B1B' },
+      { t: fmt(loss), s: 14, b: true, c: '#B91C1C' },
+    ],
+    true
+  );
+
+  // Branch B: 90% wastewater
+  pipe(`M700 ${yM + 20} H800`, 'ww');
+  box(800, yM - 10, 200, 60, '#DBEAFE', '#2563EB', [
+    { t: '90% Domestic Wastewater (m³)', s: 11, b: true, c: '#1E3A8A' },
+    { t: fmt(ww), s: 14, b: true, c: '#1D4ED8' },
+  ]);
+  pipe(`M1000 ${yM + 20} H1150 V${yM + 90}`, 'ww');
+
+  // Boiler blowdown to discharge
+  pipe(`M970 ${yG + 25} H1050`, 'blow');
+  lbl(1010, yG + 12, 'Boiler Blowdown', 9, false, 'middle', '#92400E');
+  lbl(1010, yG + 48, `${fmt(agg.boiler)} m³`, 10, true, 'middle', '#92400E');
+
+  box(1050, yM + 90, 200, yG - yM - 30, '#EDE9FE', '#7C3AED', [
+    { t: 'Final Discharge Point', s: 12, b: true, c: '#4C1D95' },
+    { t: `90% Dom. Wastewater: ${fmt(ww)}`, s: 10 },
+    { t: `Boiler Blowdown: ${fmt(agg.boiler)}`, s: 10 },
+    { t: 'Total Discharge Water (m³)', s: 11, b: true, c: '#4C1D95' },
+    { t: fmt(discharge), s: 17, b: true, c: '#6D28D9' },
+  ]);
+
+  /* ----- Defs, style, title ----- */
+  let markers = '';
+  Object.keys(PIPE_COLORS).forEach((k) => {
+    markers += `<marker id="wb-ar-${k}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="${PIPE_COLORS[k]}"/></marker>`;
+  });
+
+  const style =
+    `<style>` +
+    `.wb-svg{font-family:Arial,Helvetica,sans-serif}` +
+    `.wb-svg .wb-flow{stroke-dasharray:10 8}` +
+    `.wb-svg .wb-loss{stroke-dasharray:6 5}` +
+    `.wb-svg .wb-halo{paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}` +
+    (animated
+      ? `.wb-svg .wb-flow{animation:wbflow 0.9s linear infinite}.wb-svg .wb-loss{animation:wbflow 1.2s linear infinite}` +
+        `@keyframes wbflow{to{stroke-dashoffset:-18}}` +
+        `@media (prefers-reduced-motion: reduce){.wb-svg .wb-flow,.wb-svg .wb-loss{animation:none}}`
+      : '') +
+    `</style>`;
+
+  return (
+    `<svg class="wb-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Water Balance Diagram">` +
+    `<defs>${markers}</defs>${style}` +
+    `<rect x="0" y="0" width="${W}" height="${H}" fill="#FFFFFF"/>` +
+    `<text x="20" y="28" font-size="14" font-weight="700" fill="#111827">${esc(label)}</text>` +
+    boxes.join('') +
+    pipes.join('') +
+    labels.join('') +
+    `</svg>`
+  );
+};
+
+/* =========================================================================
+   STATIC TABLE (Excel + Print) - built from the same column definitions
+   ========================================================================= */
+const buildStaticTable = (
+  d: FormData,
+  selected: Record<GroupKey, boolean>
+): { html: string; cols: number } => {
+  const groups = buildGroups(d.names).filter((g) => selected[g.key]);
+  const calcs = d.months.map(calcMonth);
+  const base = 'border:1px solid #777;padding:3px 4px;';
+
+  let r1 = `<tr><th rowspan="2" style="${base}background:#E5E7EB;text-align:left">Month</th>`;
+  let r2 = '<tr>';
+  let colCount = 2;
+  groups.forEach((g) => {
+    const t = THEMES[g.key];
+    colCount += g.cols.length;
+    r1 += `<th colspan="${g.cols.length}" style="${base}background:${t.head};color:${t.text};text-align:center">${esc(g.title)}</th>`;
+    g.cols.forEach((c) => {
+      r2 += `<th style="${base}background:${t.head};color:${t.text};text-align:center">${esc(c.label)}${
+        c.sub ? `<br/><span style="font-weight:normal">${esc(c.sub)}</span>` : ''
+      }</th>`;
+    });
+  });
+  r1 += `<th rowspan="2" style="${base}background:#E5E7EB;text-align:center">REMARKS</th></tr>`;
+  r2 += '</tr>';
+
+  let body = '';
+  d.months.forEach((m, mi) => {
+    body += `<tr><td style="${base}background:#F3F4F6;text-align:left;font-weight:bold">${MONTHS[mi]}</td>`;
+    groups.forEach((g) => {
+      const t = THEMES[g.key];
+      g.cols.forEach((c) => {
+        let v = '';
+        if (c.kind === 'calc') v = fix2(c.num(m, calcs[mi]));
+        else {
+          const rv = c.raw ? c.raw(m) : '';
+          v = rv === '' ? '' : fix2(toNum(rv));
+        }
+        body += `<td style="${base}background:${c.kind === 'calc' ? t.lock : t.cell};text-align:right">${v}</td>`;
+      });
+    });
+    body += `<td style="${base}text-align:left">${esc(m.remarks)}</td></tr>`;
+  });
+
+  let tot = `<tr><td style="${base}background:#E5E7EB;font-weight:bold;text-align:left">Total</td>`;
+  groups.forEach((g) => {
+    const t = THEMES[g.key];
+    g.cols.forEach((c) => {
+      const s = sumArr(d.months.map((m, mi) => c.num(m, calcs[mi])));
+      tot += `<td style="${base}background:${t.head};color:${t.text};font-weight:bold;text-align:right">${fix2(s)}</td>`;
+    });
+  });
+  tot += `<td style="${base}background:#E5E7EB"></td></tr>`;
+
+  return {
+    html: `<table class="rt" style="border-collapse:collapse"><thead>${r1}${r2}</thead><tbody>${body}${tot}</tbody></table>`,
+    cols: colCount,
+  };
+};
+
+const letterheadHtml = (company: string, unit: string, year: string, title: string): string => {
+  const printed = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return (
+    `<div class="lh"><div><div class="co">${esc(company)}</div>` +
+    `<div class="tt">${esc(title)}</div></div>` +
+    `<div class="mt">Unit: <b>${esc(unit)}</b><br/>Year: <b>${esc(year)}</b><br/>Printed: ${esc(printed)}</div></div>`
+  );
+};
+
+/* =========================================================================
+   COMPONENT
+   ========================================================================= */
+const CSS = `
+.wwf-root{font-family:Inter,Segoe UI,Arial,sans-serif;color:#1f2937;display:flex;flex-direction:column;gap:16px}
+.wwf-card{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:14px}
+.wwf-bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.wwf-title{font-size:18px;font-weight:700;margin:0}
+.wwf-btn{border:1px solid #94a3b8;background:#f8fafc;color:#0f172a;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer}
+.wwf-btn:hover{background:#e2e8f0}
+.wwf-btn:focus-visible,.wwf-in:focus-visible,.wwf-name:focus-visible,.wwf-sel:focus-visible{outline:2px solid #2563eb;outline-offset:1px}
+.wwf-btn-primary{background:#0f766e;border-color:#0f766e;color:#fff}
+.wwf-btn-primary:hover{background:#115e59}
+.wwf-chk{display:inline-flex;gap:5px;align-items:center;font-size:13px;cursor:pointer}
+.wwf-scroll{overflow:auto;border:1px solid #d1d5db;border-radius:8px;max-height:75vh;background:#fff}
+.wwf-table{border-collapse:separate;border-spacing:0;font-size:12px;min-width:100%}
+.wwf-table th,.wwf-table td{border-right:1px solid #d6d3d1;border-bottom:1px solid #d6d3d1;padding:4px 6px;white-space:nowrap;vertical-align:middle}
+.wwf-table th{text-align:center;font-weight:700}
+.wwf-month{position:sticky;left:0;z-index:2;background:#f3f4f6;min-width:100px;text-align:left!important;font-weight:600}
+.wwf-table thead .wwf-month{z-index:4;background:#e5e7eb}
+.wwf-in{width:92px;text-align:right;padding:3px 5px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;font-variant-numeric:tabular-nums;font-size:12px}
+.wwf-name{width:96px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;font-size:11px;font-weight:700;text-align:center}
+.wwf-lock{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:#374151;cursor:not-allowed}
+.wwf-rem{width:200px;text-align:left;padding:3px 5px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px}
+.wwf-x{margin-left:4px;border:none;background:transparent;color:#b91c1c;font-size:15px;font-weight:700;cursor:pointer;line-height:1}
+.wwf-add{margin-left:8px;border:1px dashed currentColor;background:rgba(255,255,255,.7);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;color:inherit}
+.wwf-sub{display:block;font-size:10px;font-weight:400;opacity:.85;white-space:normal;max-width:170px;margin:2px auto 0}
+.wwf-badge{display:inline-block;background:#ecfdf5;color:#065f46;border:1px solid #6ee7b7;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700}
+.wwf-sel{border:1px solid #94a3b8;border-radius:6px;padding:5px 8px;font-size:13px;background:#fff;max-width:100%}
+.wwf-dg{overflow-x:auto;border:1px solid #e5e7eb;border-radius:8px;background:#fff}
+.wwf-dg svg{display:block;width:100%;min-width:960px;height:auto}
+`;
+
+export const WaterWithdrawalForm = ({
   selectedUnit,
   selectedYear,
-  userRole,
-}: WaterWithdrawalFormProps) {
-  const isViewer = userRole === 'viewer';
-  const safeUnit = selectedUnit || 'UNKNOWN';
-  const safeYear = selectedYear || '2025';
-  const storageKey = `water_withdrawal_${safeUnit}_${safeYear}`;
-  const unitInfo = getUnitInfo(safeUnit);
+  companyName,
+}: WaterWithdrawalFormProps) => {
+  const unit = selectedUnit === undefined || selectedUnit === '' ? 'Default Unit' : String(selectedUnit);
+  const year =
+    selectedYear === undefined || selectedYear === '' ? String(new Date().getFullYear()) : String(selectedYear);
+  const company = companyName && companyName.trim() !== '' ? companyName : 'Company Name';
+  const storageKey = `water_withdrawal_${unit}_${year}`;
 
-  const [municipalMeters, setMunicipalMeters] = useState<MeterItem[]>([
-    { id: 'm1', name: 'Meter 1' },
-    { id: 'm2', name: 'Meter 2' },
-  ]);
-
-  const [groundMeters, setGroundMeters] = useState<MeterItem[]>([
-    { id: 'g1', name: 'Meter 1' },
-    { id: 'g2', name: 'Meter 2' },
-  ]);
-
-  const [reuseMeters, setReuseMeters] = useState<MeterItem[]>([
-    { id: 'r1', name: 'Meter 1' },
-    { id: 'r2', name: 'Meter 2' },
-  ]);
-
-  const [data, setData] = useState<FormData>({});
-  const [isSaved, setIsSaved] = useState(false);
-
-  const [sections, setSections] = useState({
+  const [data, setData] = useState<FormData>(() => loadData(storageKey));
+  const [loadedKey, setLoadedKey] = useState<string>(storageKey);
+  const [selected, setSelected] = useState<Record<GroupKey, boolean>>({
     municipal: true,
     ground: true,
-    extraction: true,
+    total: true,
     reuse: true,
     rain: true,
     discharge: true,
-    remarks: true,
   });
+  const [mode, setMode] = useState<DiagramMode>('all');
+  const [inclRain, setInclRain] = useState<boolean>(true);
+  const [inclReuse, setInclReuse] = useState<boolean>(true);
+  const [animated, setAnimated] = useState<boolean>(true);
 
+  /* ----- Load when unit / year changes ----- */
   useEffect(() => {
+    if (loadedKey === storageKey) return;
+    setData(loadData(storageKey));
+    setLoadedKey(storageKey);
+  }, [storageKey, loadedKey]);
+
+  /* ----- Save on change ----- */
+  useEffect(() => {
+    if (loadedKey !== storageKey) return;
     try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        
-        if (parsed && Array.isArray(parsed.municipalMeters) && parsed.municipalMeters.length > 0) {
-          setMunicipalMeters(parsed.municipalMeters);
-        } else {
-          setMunicipalMeters([{ id: 'm1', name: 'Meter 1' }, { id: 'm2', name: 'Meter 2' }]);
-        }
-
-        if (parsed && Array.isArray(parsed.groundMeters) && parsed.groundMeters.length > 0) {
-          setGroundMeters(parsed.groundMeters);
-        } else {
-          setGroundMeters([{ id: 'g1', name: 'Meter 1' }, { id: 'g2', name: 'Meter 2' }]);
-        }
-
-        if (parsed && Array.isArray(parsed.reuseMeters) && parsed.reuseMeters.length > 0) {
-          setReuseMeters(parsed.reuseMeters);
-        } else {
-          setReuseMeters([{ id: 'r1', name: 'Meter 1' }, { id: 'r2', name: 'Meter 2' }]);
-        }
-
-        if (parsed && parsed.data && typeof parsed.data === 'object') {
-          const validatedData: FormData = {};
-          MONTHS.forEach(m => {
-            const rawMonth = parsed.data[m];
-            validatedData[m] = rawMonth && typeof rawMonth === 'object' 
-              ? {
-                  municipalValues: rawMonth.municipalValues || {},
-                  municipalDomestic: rawMonth.municipalDomestic || '',
-                  municipalProduction: rawMonth.municipalProduction || '',
-                  groundValues: rawMonth.groundValues || {},
-                  groundDomestic: rawMonth.groundDomestic || '',
-                  groundProduction: rawMonth.groundProduction || '',
-                  reuseValues: rawMonth.reuseValues || {},
-                  condensateRecovery: rawMonth.condensateRecovery || '',
-                  rainCollect: rawMonth.rainCollect || '',
-                  rainUse: rawMonth.rainUse || '',
-                  boilerBlowdown: rawMonth.boilerBlowdown || '',
-                  remarks: rawMonth.remarks || '',
-                }
-              : getEmptyMonth();
-          });
-          setData(validatedData);
-        } else {
-          const initialData: FormData = {};
-          MONTHS.forEach(m => { initialData[m] = getEmptyMonth(); });
-          setData(initialData);
-        }
-      } else {
-        const initialData: FormData = {};
-        MONTHS.forEach(m => { initialData[m] = getEmptyMonth(); });
-        setData(initialData);
-      }
+      if (typeof window !== 'undefined') window.localStorage.setItem(storageKey, JSON.stringify(data));
     } catch (e) {
-      console.error('Failed to load local storage', e);
-      const initialData: FormData = {};
-      MONTHS.forEach(m => { initialData[m] = getEmptyMonth(); });
-      setData(initialData);
+      /* storage full / blocked: ignore */
     }
-  }, [storageKey]);
+  }, [data, storageKey, loadedKey]);
 
-  const handleSave = () => {
-    if (isViewer) return;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify({ 
-        municipalMeters, 
-        groundMeters, 
-        reuseMeters, 
-        data 
-      }));
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
-    } catch (e) {
-      alert('Failed to save data to local storage.');
-    }
+  const groups = useMemo(() => buildGroups(data.names), [data.names]);
+  const calcs = useMemo(() => data.months.map(calcMonth), [data.months]);
+  const agg = useMemo(() => aggregate(data), [data]);
+  const label = useMemo(() => periodText(agg, year), [agg, year]);
+
+  const svgHtml = useMemo(
+    () => buildDiagramSvg(agg, data.names, { rain: inclRain, reuse: inclReuse }, animated, label),
+    [agg, data.names, inclRain, inclReuse, animated, label]
+  );
+
+  /* ----- Mutations ----- */
+  const updateMonth = (mi: number, fn: (m: MonthEntry) => MonthEntry): void => {
+    setData((d) => ({ ...d, months: d.months.map((m, i) => (i === mi ? fn(m) : m)) }));
   };
 
-  const updateMonthField = (month: string, field: keyof MonthData, value: string) => {
-    if (isViewer) return;
-    if (typeof value === 'string' && !isValidNumber(value) && field !== 'remarks') return;
-    setData(prev => ({
-      ...prev,
-      [month]: {
-        ...(prev[month] || getEmptyMonth()),
-        [field]: value,
-      },
+  const onCell = (mi: number, col: Col, v: string): void => {
+    if (!col.set) return;
+    if (!NUM_RE.test(v)) return;
+    const setter = col.set;
+    updateMonth(mi, (m) => setter(m, v));
+  };
+
+  const onCellBlur = (mi: number, col: Col): void => {
+    if (!col.set || !col.raw) return;
+    const setter = col.set;
+    const current = col.raw(data.months[mi]);
+    if (current === '' || current === '.') {
+      if (current === '.') updateMonth(mi, (m) => setter(m, ''));
+      return;
+    }
+    const formatted = fix2(toNum(current));
+    if (formatted !== current) updateMonth(mi, (m) => setter(m, formatted));
+  };
+
+  const renameMeter = (key: MeterKey, idx: number, name: string): void => {
+    setData((d) => ({
+      ...d,
+      names: { ...d.names, [key]: d.names[key].map((n, i) => (i === idx ? name : n)) } as MeterNames,
     }));
   };
 
-  const updateNestedQty = (month: string, section: 'municipalValues' | 'groundValues' | 'reuseValues', id: string, value: string) => {
-    if (isViewer) return;
-    if (!isValidNumber(value)) return;
-
-    setData(prev => {
-      const prevMonth = prev[month] || getEmptyMonth();
+  const addMeter = (key: MeterKey): void => {
+    setData((d) => {
+      if (d.names[key].length >= 30) return d;
+      const n = d.names[key].length + 1;
+      const nm = key === 'reuse' ? `Meter ${n} (m³)` : `Meter ${n}`;
       return {
-        ...prev,
-        [month]: {
-          ...prevMonth,
-          [section]: {
-            ...(prevMonth[section] || {}),
-            [id]: value,
-          },
-        },
+        names: { ...d.names, [key]: [...d.names[key], nm] } as MeterNames,
+        months: d.months.map((m) => ({ ...m, [key]: [...m[key], ''] } as MonthEntry)),
       };
     });
   };
 
-  const updateMeterName = (type: 'municipal' | 'ground' | 'reuse', id: string, name: string) => {
-    if (isViewer) return;
-    const setter = type === 'municipal' ? setMunicipalMeters : type === 'ground' ? setGroundMeters : setReuseMeters;
-    setter(prev => prev.map(m => (m.id === id ? { ...m, name } : m)));
-  };
-
-  const addMeter = (type: 'municipal' | 'ground' | 'reuse') => {
-    if (isViewer) return;
-    const newId = `${type.charAt(0)}${Date.now()}`;
-    const setter = type === 'municipal' ? setMunicipalMeters : type === 'ground' ? setGroundMeters : setReuseMeters;
-    const defaultName = `Meter ${type === 'municipal' ? municipalMeters.length + 1 : type === 'ground' ? groundMeters.length + 1 : reuseMeters.length + 1}`;
-    setter(prev => [...prev, { id: newId, name: defaultName }]);
-  };
-
-  const removeMeter = (type: 'municipal' | 'ground' | 'reuse', id: string) => {
-    if (isViewer) return;
-    const setter = type === 'municipal' ? setMunicipalMeters : type === 'ground' ? setGroundMeters : setReuseMeters;
-    setter(prev => prev.filter(m => m.id !== id));
-  };
-
-  const getMunicipalTotal = (row: MonthData) => municipalMeters.reduce((sum, m) => sum + n(row.municipalValues?.[m.id]), 0);
-  const getGroundTotal = (row: MonthData) => groundMeters.reduce((sum, m) => sum + n(row.groundValues?.[m.id]), 0);
-  const getReuseTotal = (row: MonthData) => reuseMeters.reduce((sum, m) => sum + n(row.reuseValues?.[m.id]), 0) + n(row.condensateRecovery);
-
-  const getGrandTotalExtraction = (row: MonthData) => getMunicipalTotal(row) + getGroundTotal(row);
-  const getTotalDomestic = (row: MonthData) => n(row.municipalDomestic) + n(row.groundDomestic);
-  const getTotalProduction = (row: MonthData) => n(row.municipalProduction) + n(row.groundProduction);
-  
-  const getDomesticWaterLoss = (row: MonthData) => getTotalDomestic(row) * 0.10;
-  const getTotalDischarge = (row: MonthData) => (getTotalDomestic(row) - getDomesticWaterLoss(row)) + n(row.boilerBlowdown);
-
-  const getYearlySum = (getter: (m: string, r: MonthData) => number) => {
-    return MONTHS.reduce((sum, m) => sum + getter(m, data[m] || getEmptyMonth()), 0);
-  };
-
-  const generateHTMLTemplate = (isPrint: boolean = false) => {
-    const title = `Water Withdrawal Report`;
-    const logoHtml = `<img src="/epyllion-logo.png" alt="Epyllion" style="height: 40px; margin-bottom: 10px;" onerror="this.style.display='none'" />`;
-
-    const letterhead = `
-      <div style="text-align: center; margin-bottom: 20px;">
-        ${logoHtml}
-        <h1 style="color: #065f46; margin: 0; font-size: 24px;">Epyllion Group</h1>
-        <h2 style="margin: 5px 0; font-size: 18px;">${unitInfo.fullName}</h2>
-        <p style="margin: 0; font-size: 12px; color: #555;">${unitInfo.address}</p>
-        <p style="margin: 8px 0 2px 0; font-size: 14px; font-weight: bold;">${title}</p>
-        <p style="margin: 0; font-size: 12px; font-weight: bold; color: #065f46;">Reporting Year: ${safeYear}</p>
-      </div>
-    `;
-
-    const monthRowSpan = 3;
-
-    let headerRow1 = `<tr><th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6;">Month</th>`;
-    let headerRow2 = `<tr>`;
-    let headerRow3 = `<tr>`;
-
-    if (sections.municipal) {
-      headerRow1 += `<th colspan="${municipalMeters.length + 3}" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-weight: bold;">MUNICIPAL WATER (m³)</th>`;
-      municipalMeters.forEach(() => {
-        headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-size: 11px;">&nbsp;</th>`;
-      });
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-size: 11px;">Total Municipal</th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-size: 11px;">Domestic</th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-size: 11px;">Production</th>`;
+  const removeMeter = (key: MeterKey, idx: number): void => {
+    if (data.names[key].length <= 1) return;
+    const has = data.months.some((m) => (m[key][idx] === undefined ? '' : m[key][idx]) !== '');
+    if (has && typeof window !== 'undefined') {
+      if (!window.confirm('This meter has entered values. Remove it and delete its data?')) return;
     }
-
-    if (sections.ground) {
-      headerRow1 += `<th colspan="${groundMeters.length + 3}" style="border: 1px solid #000; padding: 5px; background-color: #e0f2fe; text-align: center; font-weight: bold;">GROUND WATER (m³)</th>`;
-      groundMeters.forEach(() => {
-        headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #e0f2fe; text-align: center; font-size: 11px;">&nbsp;</th>`;
-      });
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #e0f2fe; text-align: center; font-size: 11px;">Total Ground Water</th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #e0f2fe; text-align: center; font-size: 11px;">Domestic</th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #e0f2fe; text-align: center; font-size: 11px;">Production</th>`;
-    }
-
-    if (sections.extraction) {
-      headerRow1 += `<th colspan="3" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-weight: bold;">TOTAL WATER EXTRACTION (m³)</th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Grand Total</th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Domestic</th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Production</th>`;
-    }
-
-    if (sections.reuse) {
-      headerRow1 += `<th colspan="${reuseMeters.length + 2}" style="border: 1px solid #000; padding: 5px; background-color: #ccfbf1; text-align: center; font-weight: bold;">WATER REUSE (m³)</th>`;
-      reuseMeters.forEach(() => {
-        headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #ccfbf1; text-align: center; font-size: 11px;">&nbsp;</th>`;
-      });
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #ccfbf1; text-align: center; font-size: 11px;">Condensate Recovery</th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #ccfbf1; text-align: center; font-size: 11px;">Total Reuse</th>`;
-    }
-
-    if (sections.rain) {
-      headerRow1 += `<th colspan="2" style="border: 1px solid #000; padding: 5px; background-color: #e0e7ff; text-align: center; font-weight: bold;">RAINWATER HARVESTING (m³)</th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #e0e7ff; text-align: center; font-size: 11px;">Collect</th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #e0e7ff; text-align: center; font-size: 11px;">Use</th>`;
-    }
-
-    if (sections.discharge) {
-      headerRow1 += `<th colspan="3" style="border: 1px solid #000; padding: 5px; background-color: #ffe4e6; text-align: center; font-weight: bold;">WATER DISCHARGE (m³)</th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #ffe4e6; text-align: center; font-size: 11px;">Domestic Water Loss<br/><span style="font-size: 9px; font-weight: normal;">(Total Domestic Water - 10%)</span></th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #ffe4e6; text-align: center; font-size: 11px;">Boiler Blowdown Water</th>`;
-      headerRow2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #ffe4e6; text-align: center; font-size: 11px;">Total Discharge Water<br/><span style="font-size: 9px; font-weight: normal;">(Discharge = Domestic Water - 10% of Domestic + Boiler Blowdown)</span></th>`;
-    }
-
-    if (sections.remarks) {
-      headerRow1 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6; text-align: center; font-weight: bold;">REMARKS</th>`;
-    }
-
-    headerRow1 += `</tr>`;
-    headerRow2 += `</tr>`;
-
-    // Only add third row if we have municipal or ground meters (they need sub-headers)
-    let tableHeadersHtml = headerRow1 + headerRow2;
-    
-    if (sections.municipal || sections.ground) {
-      if (sections.municipal) {
-        municipalMeters.forEach((m) => {
-          headerRow3 += `<th style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-size: 11px;">${m.name}</th>`;
-        });
-      }
-      if (sections.ground) {
-        groundMeters.forEach((m) => {
-          headerRow3 += `<th style="border: 1px solid #000; padding: 5px; background-color: #e0f2fe; text-align: center; font-size: 11px;">${m.name}</th>`;
-        });
-      }
-      headerRow3 += `</tr>`;
-      tableHeadersHtml += headerRow3;
-    }
-
-    let tbody = '';
-    MONTHS.forEach(m => {
-      const row = data[m] || getEmptyMonth();
-      tbody += `<tr><td style="border: 1px solid #000; padding: 5px; font-weight: bold; font-size: 11px;">${m}</td>`;
-
-      if (sections.municipal) {
-        municipalMeters.forEach(meter => {
-          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.municipalValues?.[meter.id]), 2)}</td>`;
-        });
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #fef3c7;">${fmt(getMunicipalTotal(row), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.municipalDomestic), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.municipalProduction), 2)}</td>`;
-      }
-
-      if (sections.ground) {
-        groundMeters.forEach(meter => {
-          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.groundValues?.[meter.id]), 2)}</td>`;
-        });
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #e0f2fe;">${fmt(getGroundTotal(row), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.groundDomestic), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.groundProduction), 2)}</td>`;
-      }
-
-      if (sections.extraction) {
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #d1fae5;">${fmt(getGrandTotalExtraction(row), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #d1fae5;">${fmt(getTotalDomestic(row), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #d1fae5;">${fmt(getTotalProduction(row), 2)}</td>`;
-      }
-
-      if (sections.reuse) {
-        reuseMeters.forEach(meter => {
-          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.reuseValues?.[meter.id]), 2)}</td>`;
-        });
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.condensateRecovery), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #ccfbf1;">${fmt(getReuseTotal(row), 2)}</td>`;
-      }
-
-      if (sections.rain) {
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.rainCollect), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.rainUse), 2)}</td>`;
-      }
-
-      if (sections.discharge) {
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getDomesticWaterLoss(row), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.boilerBlowdown), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #ffe4e6;">${fmt(getTotalDischarge(row), 2)}</td>`;
-      }
-
-      if (sections.remarks) {
-        tbody += `<td style="border: 1px solid #000; padding: 5px; font-size: 11px;">${row.remarks || ''}</td>`;
-      }
-      tbody += `</tr>`;
+    setData((d) => {
+      if (d.names[key].length <= 1) return d;
+      return {
+        names: { ...d.names, [key]: d.names[key].filter((_n, i) => i !== idx) } as MeterNames,
+        months: d.months.map(
+          (m) => ({ ...m, [key]: m[key].filter((_v, i) => i !== idx) } as MonthEntry)
+        ),
+      };
     });
-
-    let tfoot = '<tr style="background-color: #f3f4f6; font-weight: bold;"><td style="border: 1px solid #000; padding: 5px; font-size: 11px;">Total</td>';
-
-    if (sections.municipal) {
-      municipalMeters.forEach(meter => {
-        let sum = 0;
-        MONTHS.forEach(m => { sum += n(data[m]?.municipalValues?.[meter.id]); });
-        tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(sum, 2)}</td>`;
-      });
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px; background-color: #fef3c7;">${fmt(getYearlySum((m, r) => getMunicipalTotal(r)), 2)}</td>`;
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => n(r.municipalDomestic)), 2)}</td>`;
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => n(r.municipalProduction)), 2)}</td>`;
-    }
-
-    if (sections.ground) {
-      groundMeters.forEach(meter => {
-        let sum = 0;
-        MONTHS.forEach(m => { sum += n(data[m]?.groundValues?.[meter.id]); });
-        tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(sum, 2)}</td>`;
-      });
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px; background-color: #e0f2fe;">${fmt(getYearlySum((m, r) => getGroundTotal(r)), 2)}</td>`;
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => n(r.groundDomestic)), 2)}</td>`;
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => n(r.groundProduction)), 2)}</td>`;
-    }
-
-    if (sections.extraction) {
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px; background-color: #d1fae5;">${fmt(getYearlySum((m, r) => getGrandTotalExtraction(r)), 2)}</td>`;
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px; background-color: #d1fae5;">${fmt(getYearlySum((m, r) => getTotalDomestic(r)), 2)}</td>`;
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px; background-color: #d1fae5;">${fmt(getYearlySum((m, r) => getTotalProduction(r)), 2)}</td>`;
-    }
-
-    if (sections.reuse) {
-      reuseMeters.forEach(meter => {
-        let sum = 0;
-        MONTHS.forEach(m => { sum += n(data[m]?.reuseValues?.[meter.id]); });
-        tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(sum, 2)}</td>`;
-      });
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => n(r.condensateRecovery)), 2)}</td>`;
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px; background-color: #ccfbf1;">${fmt(getYearlySum((m, r) => getReuseTotal(r)), 2)}</td>`;
-    }
-
-    if (sections.rain) {
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => n(r.rainCollect)), 2)}</td>`;
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => n(r.rainUse)), 2)}</td>`;
-    }
-
-    if (sections.discharge) {
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getDomesticWaterLoss(r)), 2)}</td>`;
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => n(r.boilerBlowdown)), 2)}</td>`;
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px; background-color: #ffe4e6;">${fmt(getYearlySum((m, r) => getTotalDischarge(r)), 2)}</td>`;
-    }
-
-    if (sections.remarks) {
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; font-size: 11px;">-</td>`;
-    }
-    tfoot += '</tr>';
-
-    const signatureBlock = isPrint ? `
-      <div style="display: flex; justify-content: space-between; margin-top: 70px; page-break-inside: avoid;">
-        <div style="width: 30%; text-align: center;">
-          <div style="border-top: 1px solid #333; padding-top: 6px; font-size: 11px; font-weight: bold;">Prepared By</div>
-        </div>
-        <div style="width: 30%; text-align: center;">
-          <div style="border-top: 1px solid #333; padding-top: 6px; font-size: 11px; font-weight: bold;">Checked By</div>
-        </div>
-        <div style="width: 30%; text-align: center;">
-          <div style="border-top: 1px solid #333; padding-top: 6px; font-size: 11px; font-weight: bold;">Approved By</div>
-        </div>
-      </div>
-    ` : '';
-
-    return `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8" />
-        <title>Water Withdrawal - ${safeUnit} - ${safeYear}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 20px; }
-          table { border-collapse: collapse; width: 100%; font-size: 11px; }
-          th, td { border: 1px solid #000; padding: 4px; }
-          ${isPrint ? `
-          @media print {
-            @page { size: A4 landscape; margin: 10mm; }
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 0; }
-          }
-          ` : ''}
-        </style>
-      </head>
-      <body>
-        ${letterhead}
-        <table>
-          <thead>${tableHeadersHtml}</thead>
-          <tbody>${tbody}</tbody>
-          <tfoot>${tfoot}</tfoot>
-        </table>
-        ${signatureBlock}
-      </body>
-      </html>
-    `;
   };
 
-  const handleExport = () => {
-    const html = generateHTMLTemplate(false);
-    const blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Water_Withdrawal_${safeUnit}_${safeYear}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handlePrint = () => {
-    const html = generateHTMLTemplate(true);
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-      }, 500);
+  /* ----- Diagram filter handlers ----- */
+  const onMode = (v: string): void => {
+    if (v === 'all') {
+      setMode('all');
+      setInclRain(true);
+      setInclReuse(true);
+    } else if (v === 'core') {
+      setMode('core');
+      setInclRain(false);
+      setInclReuse(false);
     } else {
-      alert('Please allow pop-ups to print the report.');
+      setMode('custom');
+    }
+  };
+  const onRain = (v: boolean): void => {
+    setInclRain(v);
+    setMode(v && inclReuse ? 'all' : !v && !inclReuse ? 'core' : 'custom');
+  };
+  const onReuse = (v: boolean): void => {
+    setInclReuse(v);
+    setMode(v && inclRain ? 'all' : !v && !inclRain ? 'core' : 'custom');
+  };
+
+  /* ----- Export helpers ----- */
+  const effectiveSelected = (): Record<GroupKey, boolean> => {
+    const any = GROUP_KEYS.some((k) => selected[k]);
+    if (any) return selected;
+    return { municipal: true, ground: true, total: true, reuse: true, rain: true, discharge: true };
+  };
+
+  const downloadExcel = (): void => {
+    try {
+      const { html, cols } = buildStaticTable(data, effectiveSelected());
+      const printed = new Date().toLocaleDateString('en-GB');
+      const head =
+        `<table><tr><td colspan="${cols}" style="font-size:18pt;font-weight:bold">${esc(company)}</td></tr>` +
+        `<tr><td colspan="${cols}" style="font-size:13pt;font-weight:bold">WATER WITHDRAWAL &amp; DISCHARGE RECORD</td></tr>` +
+        `<tr><td colspan="${cols}">Unit: ${esc(unit)} | Year: ${esc(year)} | Printed: ${esc(printed)}</td></tr>` +
+        `<tr><td colspan="${cols}"></td></tr></table>`;
+      const doc =
+        `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">` +
+        `<head><meta charset="utf-8"/>` +
+        `<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Water Withdrawal</x:Name>` +
+        `<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->` +
+        `<style>td,th{font-family:Arial;font-size:10pt;mso-number-format:"\\@"}</style></head>` +
+        `<body>${head}${html}</body></html>`;
+      const blob = new Blob(['\ufeff' + doc], { type: 'application/vnd.ms-excel;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Water_Withdrawal_${unit.replace(/[^\w-]+/g, '_')}_${year}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      if (typeof window !== 'undefined') window.alert('Could not create the Excel file.');
     }
   };
 
+  const printPdf = (): void => {
+    try {
+      const { html: tbl } = buildStaticTable(data, effectiveSelected());
+      const svg = buildDiagramSvg(agg, data.names, { rain: inclRain, reuse: inclReuse }, false, label);
+      const title = 'WATER WITHDRAWAL & DISCHARGE RECORD';
+      const doc =
+        `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Water Withdrawal ${esc(unit)} ${esc(year)}</title>` +
+        `<style>` +
+        `@page{size:A4 landscape;margin:8mm}` +
+        `*{box-sizing:border-box}` +
+        `html,body{margin:0;padding:0}` +
+        `body{font-family:Arial,Helvetica,sans-serif;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}` +
+        `.lh{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f766e;padding-bottom:6px;margin-bottom:8px}` +
+        `.co{font-size:20px;font-weight:700;color:#0f172a}` +
+        `.tt{font-size:12px;font-weight:700;color:#0f766e;margin-top:2px}` +
+        `.mt{font-size:10px;text-align:right;line-height:1.5}` +
+        `table.rt{border-collapse:collapse;width:100%}` +
+        `table.rt th,table.rt td{font-size:7px;line-height:1.25}` +
+        `table.rt th{font-weight:700}` +
+        `.last{page-break-before:always}` +
+        `.badge{display:inline-block;font-size:10px;font-weight:700;border:1px solid #059669;background:#ecfdf5;color:#065f46;border-radius:10px;padding:2px 8px;margin-bottom:6px}` +
+        `.dg svg{display:block;width:100%;height:auto;max-height:118mm}` +
+        `.sig{display:flex;gap:40px;margin-top:70px}` +
+        `.sig div{flex:1;border-top:1px solid #000;padding-top:4px;text-align:center;font-size:11px;font-weight:700}` +
+        `.sig span{display:block;font-weight:400;font-size:9px;color:#444;margin-top:2px}` +
+        `</style></head><body>` +
+        `<div class="page">${letterheadHtml(company, unit, year, title)}${tbl}</div>` +
+        `<div class="last">${letterheadHtml(company, unit, year, 'WATER BALANCE DIAGRAM (m³)')}` +
+        `<div class="badge">${esc(label)}</div><div class="dg">${svg}</div>` +
+        `<div class="sig"><div>Prepared By<span>Name / Signature / Date</span></div>` +
+        `<div>Checked By<span>Name / Signature / Date</span></div>` +
+        `<div>Approved By<span>Name / Signature / Date</span></div></div></div>` +
+        `</body></html>`;
+      const w = window.open('', '_blank');
+      if (!w) {
+        window.alert('Pop-up blocked. Please allow pop-ups for this site to print or save the PDF.');
+        return;
+      }
+      w.document.open();
+      w.document.write(doc);
+      w.document.close();
+      w.focus();
+      setTimeout(() => {
+        try {
+          w.print();
+        } catch (e) {
+          /* user can print manually */
+        }
+      }, 600);
+    } catch (e) {
+      if (typeof window !== 'undefined') window.alert('Could not open the print preview.');
+    }
+  };
+
+  /* ----- Table totals ----- */
+  const totalFor = (c: Col): number => sumArr(data.months.map((m, mi) => c.num(m, calcs[mi])));
+
+  /* =======================================================================
+     RENDER
+     ======================================================================= */
   return (
-    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm">
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Water Withdrawal</h1>
-          <div className="flex flex-wrap items-center gap-2 mt-1">
-            <p className="text-sm text-slate-500">{unitInfo.fullName}</p>
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-              Reporting Year: {safeYear}
-            </span>
+    <div className="wwf-root">
+      <style>{CSS}</style>
+
+      {/* ---------- Header / actions ---------- */}
+      <div className="wwf-card">
+        <div className="wwf-bar" style={{ justifyContent: 'space-between' }}>
+          <div>
+            <h2 className="wwf-title">Water Withdrawal &amp; Discharge</h2>
+            <div style={{ fontSize: 12, color: '#475569' }}>
+              Unit: <b>{unit}</b> &nbsp; Year: <b>{year}</b> &nbsp; All values in m³ (2 decimals)
+            </div>
+          </div>
+          <div className="wwf-bar">
+            <button type="button" className="wwf-btn" onClick={downloadExcel}>
+              Download Excel (.xls)
+            </button>
+            <button type="button" className="wwf-btn wwf-btn-primary" onClick={printPdf}>
+              Print / Save PDF
+            </button>
           </div>
         </div>
-        
-        <div className="flex flex-wrap items-center gap-2">
-          {!isViewer && (
-            <button
-              onClick={handleSave}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
-            >
-              <Save size={16} /> Save Data ({safeYear})
-            </button>
-          )}
-          {isSaved && (
-            <span className="flex items-center gap-1 text-sm text-emerald-700 font-medium ml-2">
-              <CheckCircle2 size={16} /> Saved
-            </span>
-          )}
-
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm ml-2"
-          >
-            <FileSpreadsheet size={16} /> Download Excel (.xls)
-          </button>
-
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold shadow-sm transition-colors ml-2"
-          >
-            <Printer size={16} /> Print / Save PDF
-          </button>
+        <div className="wwf-bar" style={{ marginTop: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 700 }}>Include in Excel / PDF:</span>
+          {GROUP_KEYS.map((k) => (
+            <label key={k} className="wwf-chk">
+              <input
+                type="checkbox"
+                checked={selected[k]}
+                onChange={(e) => setSelected((s) => ({ ...s, [k]: e.target.checked }))}
+              />
+              {GROUP_LABELS[k]}
+            </label>
+          ))}
         </div>
       </div>
 
-      <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-4 text-sm no-print">
-        <span className="font-semibold text-slate-700 mr-2">Report Sections:</span>
-        
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.municipal} onChange={() => setSections(p => ({...p, municipal: !p.municipal}))} className="accent-yellow-600 w-4 h-4" />
-          <span>Municipal Water</span>
-        </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.ground} onChange={() => setSections(p => ({...p, ground: !p.ground}))} className="accent-sky-600 w-4 h-4" />
-          <span>Ground Water</span>
-        </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.extraction} onChange={() => setSections(p => ({...p, extraction: !p.extraction}))} className="accent-emerald-600 w-4 h-4" />
-          <span>Total Extraction</span>
-        </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.reuse} onChange={() => setSections(p => ({...p, reuse: !p.reuse}))} className="accent-teal-600 w-4 h-4" />
-          <span>Water Reuse</span>
-        </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.rain} onChange={() => setSections(p => ({...p, rain: !p.rain}))} className="accent-indigo-600 w-4 h-4" />
-          <span>Rainwater Harvesting</span>
-        </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.discharge} onChange={() => setSections(p => ({...p, discharge: !p.discharge}))} className="accent-rose-600 w-4 h-4" />
-          <span>Water Discharge</span>
-        </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.remarks} onChange={() => setSections(p => ({...p, remarks: !p.remarks}))} className="accent-gray-600 w-4 h-4" />
-          <span>Remarks</span>
-        </label>
-      </div>
-
-      {isViewer && (
-        <div className="mb-4 flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 no-print">
-          <AlertCircle size={16} /> You are viewing this data in read-only mode. Contact an admin for edit access.
-        </div>
-      )}
-
-      <div className="overflow-x-auto border border-slate-200 rounded-lg">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-600 font-semibold">
+      {/* ---------- Table ---------- */}
+      <div className="wwf-scroll">
+        <table className="wwf-table">
+          <thead>
             <tr>
-              <th rowSpan={3} className="px-2 py-2 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 w-24 text-center">Month</th>
-              
-              {sections.municipal && (
-                <th colSpan={municipalMeters.length + 3} className="px-2 py-2 bg-yellow-100 text-yellow-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Municipal Water (m³)
-                </th>
-              )}
-
-              {sections.ground && (
-                <th colSpan={groundMeters.length + 3} className="px-2 py-2 bg-sky-100 text-sky-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Ground Water (m³)
-                </th>
-              )}
-
-              {sections.extraction && (
-                <th colSpan={3} className="px-2 py-2 bg-emerald-100 text-emerald-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Total Water Extraction (m³)
-                </th>
-              )}
-
-              {sections.reuse && (
-                <th colSpan={reuseMeters.length + 2} className="px-2 py-2 bg-teal-100 text-teal-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Water Reuse (m³)
-                </th>
-              )}
-
-              {sections.rain && (
-                <th colSpan={2} className="px-2 py-2 bg-indigo-100 text-indigo-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Rainwater Harvesting (m³)
-                </th>
-              )}
-
-              {sections.discharge && (
-                <th colSpan={3} className="px-2 py-2 bg-rose-100 text-rose-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Water Discharge (m³)
-                </th>
-              )}
-
-              {sections.remarks && (
-                <th rowSpan={3} className="px-2 py-2 bg-gray-100 text-gray-900 text-center font-bold uppercase tracking-wider">
-                  Remarks
-                </th>
-              )}
+              <th rowSpan={2} className="wwf-month">
+                Month
+              </th>
+              {groups.map((g) => {
+                const t = THEMES[g.key];
+                return (
+                  <th
+                    key={g.key}
+                    colSpan={g.cols.length}
+                    style={{ background: t.head, color: t.text, borderBottom: `2px solid ${t.border}` }}
+                  >
+                    {g.title}
+                    {g.addKey && (
+                      <button
+                        type="button"
+                        className="wwf-add"
+                        onClick={() => g.addKey && addMeter(g.addKey)}
+                      >
+                        {g.addLabel}
+                      </button>
+                    )}
+                  </th>
+                );
+              })}
+              <th rowSpan={2} style={{ background: '#e5e7eb', minWidth: 220 }}>
+                REMARKS
+              </th>
             </tr>
-            
             <tr>
-              {sections.municipal && (
-                <>
-                  {municipalMeters.map((m) => (
-                    <th key={m.id} rowSpan={2} className="px-2 py-1 text-center bg-yellow-50 min-w-[100px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <input
-                          type="text"
-                          value={m.name}
-                          onChange={(e) => updateMeterName('municipal', m.id, e.target.value)}
-                          disabled={isViewer}
-                          className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-yellow-500 disabled:bg-transparent disabled:border-transparent"
-                        />
-                        {!isViewer && municipalMeters.length > 1 && (
-                          <button onClick={() => removeMeter('municipal', m.id)} className="text-red-500 hover:text-red-700 no-print">
-                            <X size={12} />
-                          </button>
+              {groups.map((g) => {
+                const t = THEMES[g.key];
+                return (
+                  <React.Fragment key={g.key}>
+                    {g.cols.map((c) => (
+                      <th key={c.id} style={{ background: t.head, color: t.text }}>
+                        {c.meter ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            <input
+                              className="wwf-name"
+                              value={c.label}
+                              aria-label="Meter name"
+                              onChange={(e) =>
+                                c.meter && renameMeter(c.meter.key, c.meter.idx, e.target.value)
+                              }
+                            />
+                            {data.names[c.meter.key].length > 1 && (
+                              <button
+                                type="button"
+                                className="wwf-x"
+                                title="Remove meter"
+                                aria-label={`Remove ${c.label}`}
+                                onClick={() => c.meter && removeMeter(c.meter.key, c.meter.idx)}
+                              >
+                                ×
+                              </button>
+                            )}
+                          </span>
+                        ) : (
+                          <>
+                            {c.label}
+                            {c.sub && <span className="wwf-sub">{c.sub}</span>}
+                          </>
                         )}
-                      </div>
-                    </th>
-                  ))}
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-yellow-50/50 border-l border-slate-200">Total Municipal</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-yellow-50/50">Domestic</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-yellow-50/50">Production</th>
-                </>
-              )}
-
-              {sections.ground && (
-                <>
-                  {groundMeters.map((m) => (
-                    <th key={m.id} rowSpan={2} className="px-2 py-1 text-center bg-sky-50 min-w-[100px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <input
-                          type="text"
-                          value={m.name}
-                          onChange={(e) => updateMeterName('ground', m.id, e.target.value)}
-                          disabled={isViewer}
-                          className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-sky-500 disabled:bg-transparent disabled:border-transparent"
-                        />
-                        {!isViewer && groundMeters.length > 1 && (
-                          <button onClick={() => removeMeter('ground', m.id)} className="text-red-500 hover:text-red-700 no-print">
-                            <X size={12} />
-                          </button>
-                        )}
-                      </div>
-                    </th>
-                  ))}
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-sky-50/50 border-l border-slate-200">Total Ground Water</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-sky-50/50">Domestic</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-sky-50/50">Production</th>
-                </>
-              )}
-
-              {sections.extraction && (
-                <>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Grand Total</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total Domestic</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total Production</th>
-                </>
-              )}
-
-              {sections.reuse && (
-                <>
-                  {reuseMeters.map((m) => (
-                    <th key={m.id} rowSpan={2} className="px-2 py-1 text-center bg-teal-50 min-w-[100px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <input
-                          type="text"
-                          value={m.name}
-                          onChange={(e) => updateMeterName('reuse', m.id, e.target.value)}
-                          disabled={isViewer}
-                          className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-teal-500 disabled:bg-transparent disabled:border-transparent"
-                        />
-                        {!isViewer && reuseMeters.length > 1 && (
-                          <button onClick={() => removeMeter('reuse', m.id)} className="text-red-500 hover:text-red-700 no-print">
-                            <X size={12} />
-                          </button>
-                        )}
-                      </div>
-                    </th>
-                  ))}
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-teal-50/50 border-l border-slate-200">Condensate Recovery</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-teal-50/50">Total Reuse</th>
-                </>
-              )}
-
-              {sections.rain && (
-                <>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-indigo-50/50">Collect</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-indigo-50/50">Use</th>
-                </>
-              )}
-
-              {sections.discharge && (
-                <>
-                  <th rowSpan={2} className="px-2 py-2 text-center bg-rose-50/50 border-l border-slate-200 min-w-[130px]">
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="text-xs">Domestic Water Loss</span>
-                      <span className="text-[10px] text-slate-500 font-normal">(Total Domestic Water - 10%)</span>
-                    </div>
-                  </th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-rose-50/50 min-w-[120px]">Boiler Blowdown Water</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center bg-rose-50/50 min-w-[160px]">
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="text-xs">Total Discharge Water</span>
-                      <span className="text-[10px] text-slate-500 font-normal">(Discharge = Domestic Water - 10% of Domestic + Boiler Blowdown)</span>
-                    </div>
-                  </th>
-                </>
-              )}
-            </tr>
-            
-            {(sections.municipal || sections.ground) && (
-              <tr>
-                {sections.municipal && (
-                  <>
-                    {municipalMeters.map((m) => (
-                      <th key={`sub-${m.id}`} className="px-1 py-1 text-center text-[10px] bg-yellow-50/30">
-                        {m.name}
                       </th>
                     ))}
-                  </>
-                )}
-                {sections.ground && (
-                  <>
-                    {groundMeters.map((m) => (
-                      <th key={`sub-${m.id}`} className="px-1 py-1 text-center text-[10px] bg-sky-50/30">
-                        {m.name}
-                      </th>
-                    ))}
-                  </>
-                )}
-              </tr>
-            )}
+                  </React.Fragment>
+                );
+              })}
+            </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
-            {MONTHS.map((month, idx) => {
-              const row = data[month] || getEmptyMonth();
-              return (
-                <tr key={month} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                  <td className="px-2 py-1 font-semibold text-slate-700 sticky left-0 bg-inherit z-10 border-r border-slate-200">{month}</td>
-                  
-                  {sections.municipal && (
-                    <>
-                      {municipalMeters.map(m => (
-                        <td key={`row-${month}-${m.id}`} className="px-1 py-1 bg-yellow-50/10">
-                          <input type="text" inputMode="decimal" value={row.municipalValues?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'municipalValues', m.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-yellow-500 rounded bg-transparent outline-none text-xs" />
-                        </td>
-                      ))}
-                      <td className="px-2 py-1 text-right font-bold text-yellow-700 bg-yellow-50/30 border-l border-slate-200">{fmt(getMunicipalTotal(row), 2)}</td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.municipalDomestic} onChange={(e) => updateMonthField(month, 'municipalDomestic', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-yellow-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.municipalProduction} onChange={(e) => updateMonthField(month, 'municipalProduction', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-yellow-500 rounded bg-transparent outline-none text-xs" /></td>
-                    </>
-                  )}
-
-                  {sections.ground && (
-                    <>
-                      {groundMeters.map(m => (
-                        <td key={`row-${month}-${m.id}`} className="px-1 py-1 bg-sky-50/10">
-                          <input type="text" inputMode="decimal" value={row.groundValues?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'groundValues', m.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-sky-500 rounded bg-transparent outline-none text-xs" />
-                        </td>
-                      ))}
-                      <td className="px-2 py-1 text-right font-bold text-sky-700 bg-sky-50/30 border-l border-slate-200">{fmt(getGroundTotal(row), 2)}</td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.groundDomestic} onChange={(e) => updateMonthField(month, 'groundDomestic', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-sky-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.groundProduction} onChange={(e) => updateMonthField(month, 'groundProduction', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-sky-500 rounded bg-transparent outline-none text-xs" /></td>
-                    </>
-                  )}
-
-                  {sections.extraction && (
-                    <>
-                      <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30 border-l border-slate-200">{fmt(getGrandTotalExtraction(row), 2)}</td>
-                      <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{fmt(getTotalDomestic(row), 2)}</td>
-                      <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{fmt(getTotalProduction(row), 2)}</td>
-                    </>
-                  )}
-
-                  {sections.reuse && (
-                    <>
-                      {reuseMeters.map(m => (
-                        <td key={`row-${month}-${m.id}`} className="px-1 py-1 bg-teal-50/10">
-                          <input type="text" inputMode="decimal" value={row.reuseValues?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'reuseValues', m.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-teal-500 rounded bg-transparent outline-none text-xs" />
-                        </td>
-                      ))}
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.condensateRecovery} onChange={(e) => updateMonthField(month, 'condensateRecovery', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-teal-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-2 py-1 text-right font-bold text-teal-700 bg-teal-50/30 border-l border-slate-200">{fmt(getReuseTotal(row), 2)}</td>
-                    </>
-                  )}
-
-                  {sections.rain && (
-                    <>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.rainCollect} onChange={(e) => updateMonthField(month, 'rainCollect', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-indigo-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.rainUse} onChange={(e) => updateMonthField(month, 'rainUse', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-indigo-500 rounded bg-transparent outline-none text-xs" /></td>
-                    </>
-                  )}
-
-                  {sections.discharge && (
-                    <>
-                      <td className="px-2 py-1 text-right text-rose-700 bg-rose-50/30 border-l border-slate-200">{fmt(getDomesticWaterLoss(row), 2)}</td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.boilerBlowdown} onChange={(e) => updateMonthField(month, 'boilerBlowdown', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-rose-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-2 py-1 text-right font-bold text-rose-700 bg-rose-50/30">{fmt(getTotalDischarge(row), 2)}</td>
-                    </>
-                  )}
-
-                  {sections.remarks && (
-                    <td className="px-1 py-1">
-                      <input type="text" value={row.remarks} onChange={(e) => updateMonthField(month, 'remarks', e.target.value)} disabled={isViewer} className="w-full min-w-[120px] px-2 py-1 border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" placeholder="Notes..." />
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-bold text-xs">
+          <tbody>
+            {data.months.map((m, mi) => (
+              <tr key={MONTHS[mi]}>
+                <td className="wwf-month">{MONTHS[mi]}</td>
+                {groups.map((g) => {
+                  const t = THEMES[g.key];
+                  return (
+                    <React.Fragment key={g.key}>
+                      {g.cols.map((c) =>
+                        c.kind === 'calc' ? (
+                          <td
+                            key={c.id}
+                            className="wwf-lock"
+                            style={{ background: t.lock }}
+                            title="Auto-calculated (locked)"
+                          >
+                            {fix2(c.num(m, calcs[mi]))}
+                          </td>
+                        ) : (
+                          <td key={c.id} style={{ background: t.cell }}>
+                            <input
+                              className="wwf-in"
+                              inputMode="decimal"
+                              placeholder="0.00"
+                              value={c.raw ? c.raw(m) : ''}
+                              aria-label={`${MONTHS[mi]} ${c.label}`}
+                              onChange={(e) => onCell(mi, c, e.target.value)}
+                              onBlur={() => onCellBlur(mi, c)}
+                            />
+                          </td>
+                        )
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+                <td style={{ background: '#fff' }}>
+                  <input
+                    className="wwf-rem"
+                    value={m.remarks}
+                    aria-label={`${MONTHS[mi]} remarks`}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      updateMonth(mi, (x) => ({ ...x, remarks: v }));
+                    }}
+                  />
+                </td>
+              </tr>
+            ))}
             <tr>
-              <td className="px-2 py-2 sticky left-0 bg-slate-100 z-10 border-r border-slate-300">Total</td>
-              
-              {sections.municipal && (
-                <>
-                  {municipalMeters.map(m => {
-                    let sum = 0;
-                    MONTHS.forEach(month => { sum += n(data[month]?.municipalValues?.[m.id]); });
-                    return <td key={`tot-${m.id}`} className="px-2 py-2 text-right text-yellow-800 bg-yellow-100/20">{fmt(sum, 2)}</td>;
-                  })}
-                  <td className="px-2 py-2 text-right text-yellow-800 bg-yellow-100/50">{fmt(getYearlySum((m, r) => getMunicipalTotal(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-yellow-800 bg-yellow-100/20">{fmt(getYearlySum((m, r) => n(r.municipalDomestic)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-yellow-800 bg-yellow-100/20">{fmt(getYearlySum((m, r) => n(r.municipalProduction)), 2)}</td>
-                </>
-              )}
-
-              {sections.ground && (
-                <>
-                  {groundMeters.map(m => {
-                    let sum = 0;
-                    MONTHS.forEach(month => { sum += n(data[month]?.groundValues?.[m.id]); });
-                    return <td key={`tot-${m.id}`} className="px-2 py-2 text-right text-sky-800 bg-sky-100/20">{fmt(sum, 2)}</td>;
-                  })}
-                  <td className="px-2 py-2 text-right text-sky-800 bg-sky-100/50">{fmt(getYearlySum((m, r) => getGroundTotal(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-sky-800 bg-sky-100/20">{fmt(getYearlySum((m, r) => n(r.groundDomestic)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-sky-800 bg-sky-100/20">{fmt(getYearlySum((m, r) => n(r.groundProduction)), 2)}</td>
-                </>
-              )}
-
-              {sections.extraction && (
-                <>
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getGrandTotalExtraction(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getTotalDomestic(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getTotalProduction(r)), 2)}</td>
-                </>
-              )}
-
-              {sections.reuse && (
-                <>
-                  {reuseMeters.map(m => {
-                    let sum = 0;
-                    MONTHS.forEach(month => { sum += n(data[month]?.reuseValues?.[m.id]); });
-                    return <td key={`tot-${m.id}`} className="px-2 py-2 text-right text-teal-800 bg-teal-100/20">{fmt(sum, 2)}</td>;
-                  })}
-                  <td className="px-2 py-2 text-right text-teal-800 bg-teal-100/20">{fmt(getYearlySum((m, r) => n(r.condensateRecovery)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-teal-800 bg-teal-100/50">{fmt(getYearlySum((m, r) => getReuseTotal(r)), 2)}</td>
-                </>
-              )}
-
-              {sections.rain && (
-                <>
-                  <td className="px-2 py-2 text-right text-indigo-800 bg-indigo-100/50">{fmt(getYearlySum((m, r) => n(r.rainCollect)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-indigo-800 bg-indigo-100/50">{fmt(getYearlySum((m, r) => n(r.rainUse)), 2)}</td>
-                </>
-              )}
-
-              {sections.discharge && (
-                <>
-                  <td className="px-2 py-2 text-right text-rose-800 bg-rose-100/50">{fmt(getYearlySum((m, r) => getDomesticWaterLoss(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-rose-800 bg-rose-100/20">{fmt(getYearlySum((m, r) => n(r.boilerBlowdown)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-rose-800 bg-rose-100/50">{fmt(getYearlySum((m, r) => getTotalDischarge(r)), 2)}</td>
-                </>
-              )}
-
-              {sections.remarks && (
-                <td className="px-2 py-2 text-right text-slate-400">-</td>
-              )}
+              <td className="wwf-month" style={{ background: '#e5e7eb' }}>
+                Total
+              </td>
+              {groups.map((g) => {
+                const t = THEMES[g.key];
+                return (
+                  <React.Fragment key={g.key}>
+                    {g.cols.map((c) => (
+                      <td
+                        key={c.id}
+                        style={{
+                          background: t.head,
+                          color: t.text,
+                          fontWeight: 700,
+                          textAlign: 'right',
+                          fontVariantNumeric: 'tabular-nums',
+                        }}
+                      >
+                        {fix2(totalFor(c))}
+                      </td>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+              <td style={{ background: '#e5e7eb' }} />
             </tr>
-          </tfoot>
+          </tbody>
         </table>
       </div>
 
-      {!isViewer && (
-        <div className="mt-4 flex flex-wrap gap-3 no-print">
-          {sections.municipal && (
-            <button onClick={() => addMeter('municipal')} className="flex items-center gap-2 px-4 py-2 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-200 rounded-lg text-sm font-semibold transition-colors">
-              <Plus size={16} /> Add Municipal Meter
-            </button>
-          )}
-          {sections.ground && (
-            <button onClick={() => addMeter('ground')} className="flex items-center gap-2 px-4 py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg text-sm font-semibold transition-colors">
-              <Plus size={16} /> Add Ground Water Meter
-            </button>
-          )}
-          {sections.reuse && (
-            <button onClick={() => addMeter('reuse')} className="flex items-center gap-2 px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-lg text-sm font-semibold transition-colors">
-              <Plus size={16} /> Add Reuse Meter
-            </button>
-          )}
+      {/* ---------- Water Balance Diagram ---------- */}
+      <div className="wwf-card">
+        <div className="wwf-bar" style={{ justifyContent: 'space-between' }}>
+          <h3 className="wwf-title" style={{ fontSize: 16 }}>
+            Water Balance Diagram (m³)
+          </h3>
+          <span className="wwf-badge">{label}</span>
         </div>
-      )}
+
+        <div className="wwf-bar" style={{ margin: '10px 0' }}>
+          <label className="wwf-chk" style={{ gap: 8 }}>
+            <span style={{ fontWeight: 700 }}>Components</span>
+            <select
+              className="wwf-sel"
+              value={mode}
+              onChange={(e) => onMode(e.target.value)}
+              aria-label="Diagram components"
+            >
+              <option value="all">All Components (Municipal + Ground + Rainwater + Reuse)</option>
+              <option value="core">Core Withdrawal &amp; Discharge Only (Municipal + Ground)</option>
+              <option value="custom">Custom selection</option>
+            </select>
+          </label>
+          <label className="wwf-chk">
+            <input type="checkbox" checked={inclRain} onChange={(e) => onRain(e.target.checked)} />
+            Include Rainwater Harvesting
+          </label>
+          <label className="wwf-chk">
+            <input type="checkbox" checked={inclReuse} onChange={(e) => onReuse(e.target.checked)} />
+            Include Water Reuse &amp; Condensate Recovery
+          </label>
+          <button type="button" className="wwf-btn" onClick={() => setAnimated((a) => !a)}>
+            {animated ? 'Pause flow' : 'Play flow'}
+          </button>
+        </div>
+
+        <div style={{ fontSize: 12, color: '#475569', marginBottom: 8 }}>
+          {agg.count === 0
+            ? 'Enter monthly values in the table above to populate the diagram.'
+            : `Sums ${agg.count} month${agg.count === 1 ? '' : 's'} with entered data.`}
+        </div>
+
+        <div className="wwf-dg" dangerouslySetInnerHTML={{ __html: svgHtml }} />
+      </div>
     </div>
   );
-}
+};
+
+export default WaterWithdrawalForm;
