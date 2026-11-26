@@ -1,4 +1,5 @@
 import React from 'react';
+import BoilerGeneratorCompressorForm from './BoilerGeneratorCompressorForm';
 import NaturalGasDieselVehiclesForm from './NaturalGasDieselVehiclesForm';
 import PurchaseElectricitySolarForm from './PurchaseElectricitySolarForm';
 import ProductionOperationsForm from './ProductionOperationsForm';
@@ -120,6 +121,9 @@ if (activeSubModule === 'inv_electricity_solar') {
 }
   if (activeSubModule === 'inv_fuel_vehicles') {
     return <NaturalGasDieselVehiclesForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
+  }
+  if (activeSubModule === 'inv_steam_boiler') {
+    return <BoilerGeneratorCompressorForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
   }
 
   return (
