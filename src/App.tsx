@@ -246,46 +246,31 @@ const MODULES = [
   },
   { 
     id: 'long_term_strategy', 
-    label: 'Long Term Strategy', 
-    icon: Globe,
-    subModules: [{ id: 'long_term_strategy_overview', label: 'Overview (Coming Soon)' }]
-  },
-  { 
-    id: 'license_permit', 
-    label: 'License & Permit Tracking', 
-    icon: FileCheck,
-    subModules: [{ id: 'license_permit_overview', label: 'Overview (Coming Soon)' }]
-  },
-  { 
-    id: 'legal_requirement', 
-    label: 'Legal Requirement Monitoring',
-      { 
-    id: 'sustainability_summary', 
-    label: 'Sustainability Summary', 
-    icon: TrendingUp, // Or change to a preferred icon like Leaf or Activity
-    subModules: [{ id: 'sus_summary_overview', label: 'Overview (Coming Soon)' }]
-  },
-  { 
-    id: 'mcd_data_management', 
-    label: 'MCD Data Management', 
-    icon: Globe, // Or change to a preferred icon like FileSpreadsheet
-    subModules: [{ id: 'mcd_overview', label: 'Overview (Coming Soon)' }]
-  },
-  { 
-    id: 'documents', 
-    label: 'Documents', 
-    icon: FolderOpen,
-    subModules: [{ id: 'documents_overview', label: 'Overview (Coming Soon)' }]
-  },
-    icon: Scale,
-    subModules: [{ id: 'legal_requirement_overview', label: 'Overview (Coming Soon)' }]
-  },
-  { 
-    id: 'documents', 
-    label: 'Documents', 
-    icon: FolderOpen,
-    subModules: [{ id: 'documents_overview', label: 'Overview (Coming Soon)' }]
-  },
+        {
+      id: 'legal_requirement',
+      label: 'Legal Requirement Monitoring',
+      icon: Scale,
+      subModules: [{ id: 'legal_requirement_overview', label: 'Overview (Coming Soon)' }]
+    },
+    {
+      id: 'sustainability_summary',
+      label: 'Sustainability Summary',
+      icon: TrendingUp,
+      subModules: [{ id: 'sus_summary_overview', label: 'Overview (Coming Soon)' }]
+    },
+    {
+      id: 'mcd_data_management',
+      label: 'MCD Data Management',
+      icon: Globe,
+      subModules: [{ id: 'mcd_overview', label: 'Overview (Coming Soon)' }]
+    },
+    {
+      id: 'documents',
+      label: 'Documents',
+      icon: FolderOpen,
+      subModules: [{ id: 'documents_overview', label: 'Overview (Coming Soon)' }]
+    },
+
 ];
 
 // ============================================================
