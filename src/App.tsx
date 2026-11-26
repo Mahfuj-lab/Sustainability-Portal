@@ -160,7 +160,20 @@ interface ProductionRow {
   prod_pcs_next: number; prod_pcs_fenatech: number; prod_pcs_4f: number; total_production_kg: number;
 }
 
-const FACTORIES = ['EKWL', 'DKL', 'DDL', 'EKWL-HW', 'ESL', 'ESL-Extention'];
+const FACTORIES = ['EKWL', 'DKL', 'DDL', 'EKWL-HW', 'ESL', 'ESL-Extention', 'EFL', 'EKL', 'EPL', 'EWL'];
+
+const UNIT_FULL_NAMES: Record<string, string> = {
+  'EKWL': 'Epyllion Knitwears Ltd.',
+  'DKL': 'Dekko Knitwears Ltd.',
+  'DDL': 'Dazzling Dresses Ltd.',
+  'EKWL-HW': 'Epyllion Knitwears Ltd. (HW)',
+  'ESL': 'Epyllion Style Ltd.',
+  'ESL-Extention': 'Epyllion Style Ltd.(Extention)',
+  'EFL': 'Epyllion Fabrics Ltd.',
+  'EKL': 'Epyllion Knitwears Ltd.',
+  'EPL': 'Epyllion Limited.',
+  'EWL': 'Epyllion Washing Ltd.'
+};
 const YEARS = [2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030];
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -245,7 +258,25 @@ const MODULES = [
   },
   { 
     id: 'legal_requirement', 
-    label: 'Legal Requirement Monitoring', 
+    label: 'Legal Requirement Monitoring',
+      { 
+    id: 'sustainability_summary', 
+    label: 'Sustainability Summary', 
+    icon: TrendingUp, // Or change to a preferred icon like Leaf or Activity
+    subModules: [{ id: 'sus_summary_overview', label: 'Overview (Coming Soon)' }]
+  },
+  { 
+    id: 'mcd_data_management', 
+    label: 'MCD Data Management', 
+    icon: Globe, // Or change to a preferred icon like FileSpreadsheet
+    subModules: [{ id: 'mcd_overview', label: 'Overview (Coming Soon)' }]
+  },
+  { 
+    id: 'documents', 
+    label: 'Documents', 
+    icon: FolderOpen,
+    subModules: [{ id: 'documents_overview', label: 'Overview (Coming Soon)' }]
+  },
     icon: Scale,
     subModules: [{ id: 'legal_requirement_overview', label: 'Overview (Coming Soon)' }]
   },
@@ -789,6 +820,19 @@ const App: React.FC = () => {
 
         {/* MAIN CONTENT AREA */}
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+                    <div className="mb-6 bg-white/50 backdrop-blur-sm rounded-xl p-4 border border-gray-200/60 shadow-sm flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-gray-800">
+                {UNIT_FULL_NAMES[factory] || factory}
+              </h1>
+              <p className="text-xs text-gray-500 mt-1 font-medium tracking-wide uppercase">
+                Sustainability Portal &bull; {year}
+              </p>
+            </div>
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-100 font-semibold text-xs">
+              Active Unit: {factory}
+            </div>
+          </div>
           {activeModule === 'excel_export' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
               <h2 className="text-sm font-bold text-gray-800">Custom Excel Export (CSV)</h2>
