@@ -111,7 +111,7 @@ function buildHeaderTitle(activeSubModule: string): string {
   }
 }
 
-function TotalManpowerPlaceholder(): JSX.Element {
+function TotalManpowerPlaceholder(): React.ReactNode {
   const rows: Array<{ month: string; maleW: number; femaleW: number; maleS: number; femaleS: number }> =
     MONTHS.map((m) => ({ month: m, maleW: 0, femaleW: 0, maleS: 0, femaleS: 0 }));
 
@@ -157,7 +157,7 @@ function TotalManpowerPlaceholder(): JSX.Element {
   );
 }
 
-function WorkStationPlaceholder(): JSX.Element {
+function WorkStationPlaceholder(): React.ReactNode {
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
       <table className="min-w-full text-sm">
@@ -195,7 +195,7 @@ function WorkStationPlaceholder(): JSX.Element {
   );
 }
 
-function SummaryPlaceholder(): JSX.Element {
+function SummaryPlaceholder(): React.ReactNode {
   const kpis: Array<{ label: string; value: string; icon: React.ReactNode; tone: string }> = [
     {
       label: 'Total Manpower',
@@ -250,7 +250,7 @@ function SummaryPlaceholder(): JSX.Element {
   );
 }
 
-function GatePassPlaceholder(): JSX.Element {
+function GatePassPlaceholder(): React.ReactNode {
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
       <table className="min-w-full text-sm">
