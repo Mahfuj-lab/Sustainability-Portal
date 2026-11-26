@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import InventoryManagement from './modules/InventoryManagement';
 import SettingsPanel, { THEMES } from './modules/SettingsPanel';
+import FactoryProfile from './modules/FactoryProfile';
 type ThemeKey = string;
 
 // ============================================================
@@ -211,7 +212,13 @@ const MODULES = [
     id: 'factory_profile', 
     label: 'Factory Profile', 
     icon: Factory,
-    subModules: [{ id: 'factory_profile_overview', label: 'Overview (Coming Soon)' }]
+       subModules: [
+      { id: 'fp_basic_info', label: 'Basic Information' },
+      { id: 'fp_premises', label: 'Factory Premises' },
+      { id: 'fp_working_hour', label: 'Working Hour & Payment System' },
+      { id: 'fp_floor_glance', label: 'Floor At a Glance' },
+      { id: 'fp_machinery_list', label: 'Machinery List' }
+    ] subModules: [{ id: 'factory_profile_overview', label: 'Overview (Coming Soon)' }]
   },
   { 
     id: 'inventory_mgmt', 
@@ -935,8 +942,18 @@ const App: React.FC = () => {
             />
           )}
 
+                    {activeModule.startsWith('fp_') && (
+            <FactoryProfile 
+              activeSubModule={activeModule} 
+              selectedUnit={factory} 
+              unitFullName={UNIT_FULL_NAMES[factory] || factory} 
+              userRole={user?.role || 'viewer'} 
+              restGet={restGet} 
+              restSet={restSet} 
+            />
+          )}
           {/* NEW INVENTORY MANAGEMENT COMPONENT */}
-          {activeModule.startsWith('inv_') && (
+          {activeModule.startsWith('inv_')&& !activeModule.startsWith('fp_') && (
             <InventoryManagement 
               activeSubModule={activeModule} 
               selectedUnit={factory} 
