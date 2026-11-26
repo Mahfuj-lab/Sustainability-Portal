@@ -1,4 +1,5 @@
 import React from 'react';
+import NaturalGasDieselVehiclesForm from './NaturalGasDieselVehiclesForm';
 import PurchaseElectricitySolarForm from './PurchaseElectricitySolarForm';
 import ProductionOperationsForm from './ProductionOperationsForm';
 import { 
@@ -106,6 +107,9 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({
 if (activeSubModule === 'inv_electricity_solar') {
   return <PurchaseElectricitySolarForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
 }
+  if (activeSubModule === 'inv_fuel_vehicles') {
+    return <NaturalGasDieselVehiclesForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
+  }
 
   return (
     <div className="space-y-6">
