@@ -1077,6 +1077,7 @@ const App: React.FC = () => {
               restGet={restGet}
               restSet={restSet}
             />
+    )}
               {activeModule.startsWith('fp_') && (
             <FactoryProfile
               activeSubModule={activeModule}
