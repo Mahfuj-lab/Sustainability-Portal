@@ -1107,8 +1107,6 @@ const App: React.FC = () => {
               restSet={restSet}
             />
           )}
-
-          )}
              
         </main>
       </div>
