@@ -1078,14 +1078,13 @@ const App: React.FC = () => {
               restSet={restSet}
             />
     )}
-              {activeModule.startsWith('fp_') && (
+                        {activeModule.startsWith('fp_') && (
             <FactoryProfile
               activeSubModule={activeModule}
               selectedUnit={factory}
               selectedYear={year.toString()}
               userRole={user?.role || 'viewer'}
               restGet={restGet}
-              restSet={restSet}
             />
           )}
 
@@ -1100,13 +1099,17 @@ const App: React.FC = () => {
 
           {activeModule === 'settings' && (
             <SettingsPanel
-              currentThemeId={themeId}
-              onThemeChange={(newTheme: any) => setThemeId(typeof newTheme === 'string' ? newTheme : newTheme.id)}
+              currentThemeId={localStorage.getItem('portal_theme') || 'emerald'}
+              onThemeChange={(newTheme: any) => {
+                const id = typeof newTheme === 'string' ? newTheme : newTheme.id;
+                localStorage.setItem('portal_theme', id);
+                window.location.reload();
+              }}
               userRole={user?.role || 'viewer'}
               restGet={restGet}
-              restSet={restSet}
             />
           )}
+
              
         </main>
       </div>
