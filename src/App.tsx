@@ -1078,14 +1078,17 @@ const App: React.FC = () => {
               restSet={restSet}
             />
     )}
-                        {activeModule.startsWith('fp_') && (
+                  {activeModule.startsWith('fp_') && (
             <FactoryProfile
               activeSubModule={activeModule}
               selectedUnit={factory}
+              unitFullName={UNIT_FULL_NAMES[factory] || factory}
               userRole={user?.role || 'viewer'}
               restGet={restGet}
+              
             />
           )}
+
 
           {activeModule.startsWith('inv_') && (
             <InventoryManagement
