@@ -974,15 +974,13 @@ const App: React.FC = () => {
             </div>
           )}
 
-                           {activeModule.startsWith('kpi_') && (
+                                    {activeModule.startsWith('kpi_') && (
             <KpiManagement
               activeSubModule={activeModule}
               selectedUnit={factory}
               unitFullName={UNIT_FULL_NAMES[factory] || factory}
               selectedYear={year.toString()}
               userRole={user?.role || 'viewer'}
-              restGet={restGet}
-              restSet={restSet}
             />
           )}
 
