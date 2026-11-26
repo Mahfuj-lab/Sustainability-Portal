@@ -59,14 +59,32 @@ const getEmptyMonth = (): MonthData => ({
 });
 
 const getUnitInfo = (code: string) => {
-  const dir = UNIT_DIRECTORY as any;
-  if (dir && dir[code]) {
-    return {
-      fullName: dir[code].fullName || dir[code].name || code,
-      address: dir[code].address || 'Bangladesh',
-    };
+  const fallback = { fullName: code || 'Unknown Unit', address: 'Dhaka, Bangladesh' };
+  if (!code) return fallback;
+
+  try {
+    const dir = UNIT_DIRECTORY as any;
+    if (Array.isArray(dir)) {
+      const found = dir.find((u: any) => u && (u.code === code || u.id === code));
+      if (found) {
+        return {
+          fullName: found.fullName || found.name || code,
+          address: found.address || 'Dhaka, Bangladesh',
+        };
+      }
+    } else if (dir && typeof dir === 'object') {
+      const found = dir[code];
+      if (found) {
+        return {
+          fullName: found.fullName || found.name || code,
+          address: found.address || 'Dhaka, Bangladesh',
+        };
+      }
+    }
+  } catch (e) {
+    console.error('UNIT_DIRECTORY lookup failed', e);
   }
-  return { fullName: code, address: 'Bangladesh' };
+  return fallback;
 };
 
 const isValidNumber = (val: string): boolean => {
@@ -80,8 +98,10 @@ export default function ProductionOperationsForm({
   userRole,
 }: ProductionOperationsFormProps) {
   const isViewer = userRole === 'viewer';
-  const storageKey = `prod_ops_${selectedUnit}_${selectedYear}`;
-  const unitInfo = getUnitInfo(selectedUnit);
+  const safeUnit = selectedUnit || 'UNKNOWN';
+  const safeYear = selectedYear || '2025';
+  const storageKey = `prod_ops_${safeUnit}_${safeYear}`;
+  const unitInfo = getUnitInfo(safeUnit);
 
   const [buyers, setBuyers] = useState<Buyer[]>([
     { id: 'b1', name: '' },
@@ -98,22 +118,52 @@ export default function ProductionOperationsForm({
       const stored = localStorage.getItem(storageKey);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.buyers && Array.isArray(parsed.buyers)) setBuyers(parsed.buyers);
-        if (parsed.data) setData(parsed.data);
+        
+        if (parsed && Array.isArray(parsed.buyers) && parsed.buyers.length > 0) {
+          setBuyers(parsed.buyers);
+        } else {
+          setBuyers([{ id: 'b1', name: '' }, { id: 'b2', name: '' }, { id: 'b3', name: '' }]);
+        }
+
+        if (parsed && parsed.data && typeof parsed.data === 'object') {
+          const validatedData: FormData = {};
+          MONTHS.forEach(m => {
+            const rawMonth = parsed.data[m];
+            validatedData[m] = rawMonth && typeof rawMonth === 'object' 
+              ? {
+                  manPower: rawMonth.manPower || '',
+                  workingDays: rawMonth.workingDays || '',
+                  availableHour: rawMonth.availableHour || '',
+                  produceHour: rawMonth.produceHour || '',
+                  totalMTO: rawMonth.totalMTO || '',
+                  averageSMV: rawMonth.averageSMV || '',
+                  remarks: rawMonth.remarks || '',
+                  prodPcs: rawMonth.prodPcs || {},
+                  shipPcs: rawMonth.shipPcs || {},
+                  shipKg: rawMonth.shipKg || {},
+                  shipSam: rawMonth.shipSam || {},
+                }
+              : getEmptyMonth();
+          });
+          setData(validatedData);
+        } else {
+          const initialData: FormData = {};
+          MONTHS.forEach(m => { initialData[m] = getEmptyMonth(); });
+          setData(initialData);
+        }
       } else {
         const initialData: FormData = {};
         MONTHS.forEach(m => { initialData[m] = getEmptyMonth(); });
         setData(initialData);
-        setBuyers([
-          { id: 'b1', name: '' },
-          { id: 'b2', name: '' },
-          { id: 'b3', name: '' },
-        ]);
       }
     } catch (e) {
-      console.error('Failed to load data', e);
+      console.error('Failed to load or parse local storage data', e);
+      const initialData: FormData = {};
+      MONTHS.forEach(m => { initialData[m] = getEmptyMonth(); });
+      setData(initialData);
+      setBuyers([{ id: 'b1', name: '' }, { id: 'b2', name: '' }, { id: 'b3', name: '' }]);
     }
-  }, [storageKey, selectedUnit, selectedYear]);
+  }, [storageKey]);
 
   const handleSave = () => {
     if (isViewer) return;
@@ -133,7 +183,7 @@ export default function ProductionOperationsForm({
     setData(prev => ({
       ...prev,
       [month]: {
-        ...prev[month],
+        ...(prev[month] || getEmptyMonth()),
         [field]: value,
       },
     }));
@@ -143,16 +193,19 @@ export default function ProductionOperationsForm({
     if (isViewer) return;
     if (!isValidNumber(value)) return;
 
-    setData(prev => ({
-      ...prev,
-      [month]: {
-        ...prev[month],
-        [section]: {
-          ...prev[month][section],
-          [buyerId]: value,
+    setData(prev => {
+      const prevMonth = prev[month] || getEmptyMonth();
+      return {
+        ...prev,
+        [month]: {
+          ...prevMonth,
+          [section]: {
+            ...(prevMonth[section] || {}),
+            [buyerId]: value,
+          },
         },
-      },
-    }));
+      };
+    });
   };
 
   const updateBuyerName = (id: string, name: string) => {
@@ -172,17 +225,22 @@ export default function ProductionOperationsForm({
   };
 
   const getEfficiency = (row: MonthData) => {
-    const avail = n(row.availableHour);
-    const prod = n(row.produceHour);
+    const avail = n(row?.availableHour);
+    const prod = n(row?.produceHour);
     return avail > 0 ? ((prod / avail) * 100).toFixed(2) : '0.00';
   };
 
   const getSectionTotal = (row: MonthData, section: 'prodPcs' | 'shipPcs' | 'shipKg' | 'shipSam') => {
-    return buyers.reduce((sum, b) => sum + n(row[section]?.[b.id]), 0);
+    if (!row || !row[section]) return 0;
+    return buyers.reduce((sum, b) => sum + n(row[section][b.id]), 0);
   };
 
   const getBuyerYearTotal = (buyerId: string, section: 'prodPcs' | 'shipPcs' | 'shipKg' | 'shipSam') => {
-    return MONTHS.reduce((sum, m) => sum + n(data[m]?.[section]?.[buyerId]), 0);
+    return MONTHS.reduce((sum, m) => {
+      const row = data[m];
+      if (!row || !row[section]) return sum;
+      return sum + n(row[section][buyerId]);
+    }, 0);
   };
 
   const getColumnYearTotal = (section: 'prodPcs' | 'shipPcs' | 'shipKg' | 'shipSam') => {
@@ -204,7 +262,7 @@ export default function ProductionOperationsForm({
   };
 
   const generateHTMLTable = (includeOperations: boolean, includeProd: boolean, includeShipPcs: boolean, includeShipKg: boolean, includeShipSam: boolean) => {
-    const title = `Production & Operations Report - ${selectedYear}`;
+    const title = `Production & Operations Report - ${safeYear}`;
 
     const letterhead = `
       <div style="text-align: center; margin-bottom: 20px;">
@@ -212,7 +270,7 @@ export default function ProductionOperationsForm({
         <h2 style="margin: 5px 0; font-size: 18px;">${unitInfo.fullName}</h2>
         <p style="margin: 0; font-size: 12px; color: #555;">${unitInfo.address}</p>
         <p style="margin: 5px 0; font-size: 14px; font-weight: bold;">${title}</p>
-        <p style="margin: 2px 0; font-size: 12px; font-weight: bold; color: #065f46;">Reporting Year: ${selectedYear}</p>
+        <p style="margin: 2px 0; font-size: 12px; font-weight: bold; color: #065f46;">Reporting Year: ${safeYear}</p>
       </div>
     `;
 
@@ -253,20 +311,20 @@ export default function ProductionOperationsForm({
       
       if (includeOperations) {
         tbody += `
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.manPower}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.workingDays}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.availableHour}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.produceHour}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.totalMTO}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.manPower || ''}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.workingDays || ''}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.availableHour || ''}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.produceHour || ''}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.totalMTO || ''}</td>
           <td style="border: 1px solid #000; padding: 5px; text-align: right;">${getEfficiency(row)}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.averageSMV}</td>
+          <td style="border: 1px solid #000; padding: 5px; text-align: right;">${row.averageSMV || ''}</td>
         `;
       }
 
       const buildBuyerCells = (section: 'prodPcs' | 'shipPcs' | 'shipKg' | 'shipSam') => {
         let c = '';
         buyers.forEach(b => {
-          c += `<td style="border: 1px solid #000; padding: 5px; text-align: right;">${row[section][b.id] || ''}</td>`;
+          c += `<td style="border: 1px solid #000; padding: 5px; text-align: right;">${row[section]?.[b.id] || ''}</td>`;
         });
         c += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold;">${fmt(getSectionTotal(row, section))}</td>`;
         return c;
@@ -277,7 +335,7 @@ export default function ProductionOperationsForm({
       if (includeShipKg) tbody += buildBuyerCells('shipKg');
       if (includeShipSam) tbody += buildBuyerCells('shipSam');
 
-      tbody += `<td style="border: 1px solid #000; padding: 5px;">${row.remarks}</td></tr>`;
+      tbody += `<td style="border: 1px solid #000; padding: 5px;">${row.remarks || ''}</td></tr>`;
     });
 
     let tfoot = '<tr style="background-color: #f3f4f6; font-weight: bold;"><td style="border: 1px solid #000; padding: 5px;">Total</td>';
@@ -372,7 +430,7 @@ export default function ProductionOperationsForm({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Production_Operations_${selectedUnit}_${selectedYear}.xls`;
+    link.download = `Production_Operations_${safeUnit}_${safeYear}.xls`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -398,7 +456,7 @@ export default function ProductionOperationsForm({
           <div className="flex items-center gap-2 mt-1">
             <p className="text-sm text-slate-500">{unitInfo.fullName}</p>
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-              Reporting Year: {selectedYear}
+              Reporting Year: {safeYear}
             </span>
           </div>
         </div>
@@ -409,7 +467,7 @@ export default function ProductionOperationsForm({
               onClick={handleSave}
               className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition-colors"
             >
-              <Save size={16} /> Save Data ({selectedYear})
+              <Save size={16} /> Save Data ({safeYear})
             </button>
           )}
           {isSaved && (
@@ -452,8 +510,8 @@ export default function ProductionOperationsForm({
         <h1 style={{ color: '#065f46', margin: 0, fontSize: '24px' }}>Epyllion Group</h1>
         <h2 style={{ margin: '5px 0', fontSize: '18px' }}>{unitInfo.fullName}</h2>
         <p style={{ margin: 0, fontSize: '12px', color: '#555' }}>{unitInfo.address}</p>
-        <p style={{ margin: '5px 0', fontSize: '14px', fontWeight: 'bold' }}>Production &amp; Operations - {selectedYear}</p>
-        <p style={{ margin: '2px 0', fontSize: '12px', fontWeight: 'bold', color: '#065f46' }}>Reporting Year: {selectedYear}</p>
+        <p style={{ margin: '5px 0', fontSize: '14px', fontWeight: 'bold' }}>Production &amp; Operations - {safeYear}</p>
+        <p style={{ margin: '2px 0', fontSize: '12px', fontWeight: 'bold', color: '#065f46' }}>Reporting Year: {safeYear}</p>
       </div>
 
       {isViewer && (
@@ -545,28 +603,28 @@ export default function ProductionOperationsForm({
 
                   {buyers.map(b => (
                     <td key={`${month}-prod-${b.id}`} className="px-1 py-1">
-                      <input type="text" inputMode="decimal" value={row.prodPcs[b.id] || ''} onChange={(e) => updateBuyerQty(month, 'prodPcs', b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                      <input type="text" inputMode="decimal" value={row.prodPcs?.[b.id] || ''} onChange={(e) => updateBuyerQty(month, 'prodPcs', b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
                     </td>
                   ))}
                   <td className="px-2 py-1 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-slate-200">{fmt(getSectionTotal(row, 'prodPcs'))}</td>
 
                   {buyers.map(b => (
                     <td key={`${month}-shippcs-${b.id}`} className="px-1 py-1">
-                      <input type="text" inputMode="decimal" value={row.shipPcs[b.id] || ''} onChange={(e) => updateBuyerQty(month, 'shipPcs', b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                      <input type="text" inputMode="decimal" value={row.shipPcs?.[b.id] || ''} onChange={(e) => updateBuyerQty(month, 'shipPcs', b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
                     </td>
                   ))}
                   <td className="px-2 py-1 text-right font-bold text-indigo-700 bg-indigo-50/30 border-r border-slate-200">{fmt(getSectionTotal(row, 'shipPcs'))}</td>
 
                   {buyers.map(b => (
                     <td key={`${month}-shipkg-${b.id}`} className="px-1 py-1">
-                      <input type="text" inputMode="decimal" value={row.shipKg[b.id] || ''} onChange={(e) => updateBuyerQty(month, 'shipKg', b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                      <input type="text" inputMode="decimal" value={row.shipKg?.[b.id] || ''} onChange={(e) => updateBuyerQty(month, 'shipKg', b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
                     </td>
                   ))}
                   <td className="px-2 py-1 text-right font-bold text-amber-700 bg-amber-50/30 border-r border-slate-200">{fmt(getSectionTotal(row, 'shipKg'))}</td>
 
                   {buyers.map(b => (
                     <td key={`${month}-shipsam-${b.id}`} className="px-1 py-1">
-                      <input type="text" inputMode="decimal" value={row.shipSam[b.id] || ''} onChange={(e) => updateBuyerQty(month, 'shipSam', b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                      <input type="text" inputMode="decimal" value={row.shipSam?.[b.id] || ''} onChange={(e) => updateBuyerQty(month, 'shipSam', b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
                     </td>
                   ))}
                   <td className="px-2 py-1 text-right font-bold text-orange-700 bg-orange-50/30 border-r border-slate-200">{fmt(getSectionTotal(row, 'shipSam'))}</td>
