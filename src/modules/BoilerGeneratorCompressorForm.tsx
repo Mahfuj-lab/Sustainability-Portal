@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, X, Printer, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { Save, Plus, X, Printer, CheckCircle2, AlertCircle, FileSpreadsheet, Lock } from 'lucide-react';
 import { UNIT_DIRECTORY } from '../utils/unitDirectory';
 
 export interface BoilerGeneratorCompressorFormProps {
@@ -339,8 +339,7 @@ export default function BoilerGeneratorCompressorForm({
         [month]: {
           ...prevMonth,
           [section]: {
-            ...((prevMonth[section] as any) || {}),
-
+            ...(prevMonth[section] || {}),
             [id]: value,
           },
         },
@@ -481,35 +480,35 @@ export default function BoilerGeneratorCompressorForm({
 
       if (sections.generator) {
         generators.forEach(g => {
-          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.genDieselValues?.[g.id]), 2)}</td>`;
+          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px; background-color: #f9fafb;">${fmt(n(row.genDieselValues?.[g.id]), 2)}</td>`;
           tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.genRunningHourValues?.[g.id]), 2)}</td>`;
-          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.genElectricityValues?.[g.id]), 2)}</td>`;
+          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px; background-color: #f9fafb;">${fmt(n(row.genElectricityValues?.[g.id]), 2)}</td>`;
         });
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getGenDieselTotal(row), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getGenRunHourTotal(row), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getGenElecTotal(row), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${getGenIntensity(row)}</td>`;
+        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #f3f4f6;">${fmt(getGenDieselTotal(row), 2)}</td>`;
+        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #f3f4f6;">${fmt(getGenRunHourTotal(row), 2)}</td>`;
+        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #f3f4f6;">${fmt(getGenElecTotal(row), 2)}</td>`;
+        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #f3f4f6;">${getGenIntensity(row)}</td>`;
       }
 
       if (sections.boiler) {
         boilers.forEach(b => {
-          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.boilerDieselValues?.[b.id]), 2)}</td>`;
+          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px; background-color: #f9fafb;">${fmt(n(row.boilerDieselValues?.[b.id]), 2)}</td>`;
           tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.boilerNgValues?.[b.id]), 2)}</td>`;
           tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.boilerDieselHourValues?.[b.id]), 2)}</td>`;
           tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.boilerNgHourValues?.[b.id]), 2)}</td>`;
-          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getBoilerTotalRunHour(row, b.id), 2)}</td>`;
+          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #f3f4f6;">${fmt(getBoilerTotalRunHour(row, b.id), 2)}</td>`;
           tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.boilerSteamValues?.[b.id]), 2)}</td>`;
         });
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getBoilerDieselTotal(row), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getBoilerNgTotal(row), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(boilers.reduce((s, b) => s + n(row.boilerSteamValues?.[b.id]), 0), 2)}</td>`;
+        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #f3f4f6;">${fmt(getBoilerDieselTotal(row), 2)}</td>`;
+        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #f3f4f6;">${fmt(getBoilerNgTotal(row), 2)}</td>`;
+        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #f3f4f6;">${fmt(boilers.reduce((s, b) => s + n(row.boilerSteamValues?.[b.id]), 0), 2)}</td>`;
       }
 
       if (sections.compressor) {
         compressors.forEach(c => {
           tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.compElecValues?.[c.id]), 2)}</td>`;
         });
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getCompElecTotal(row), 2)}</td>`;
+        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px; background-color: #f3f4f6;">${fmt(getCompElecTotal(row), 2)}</td>`;
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.compRunningHour), 2)}</td>`;
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.compAir), 2)}</td>`;
       }
@@ -841,9 +840,9 @@ export default function BoilerGeneratorCompressorForm({
                   <>
                     {generators.map(g => (
                       <React.Fragment key={`sub-${g.id}`}>
-                        <th className="px-1 py-1 text-center text-[10px] bg-emerald-50/30 border-l border-slate-200">Diesel (L)</th>
+                        <th className="px-1 py-1 text-center text-[10px] bg-emerald-50/30 border-l border-slate-200">Diesel (L) <Lock size={8} className="inline text-slate-400" /></th>
                         <th className="px-1 py-1 text-center text-[10px] bg-emerald-50/30">Run Hour</th>
-                        <th className="px-1 py-1 text-center text-[10px] bg-emerald-50/30">Elec (kWh)</th>
+                        <th className="px-1 py-1 text-center text-[10px] bg-emerald-50/30">Elec (kWh) <Lock size={8} className="inline text-slate-400" /></th>
                       </React.Fragment>
                     ))}
                   </>
@@ -852,11 +851,11 @@ export default function BoilerGeneratorCompressorForm({
                   <>
                     {boilers.map(b => (
                       <React.Fragment key={`sub-${b.id}`}>
-                        <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30 border-l border-slate-200">Diesel (L)</th>
+                        <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30 border-l border-slate-200">Diesel (L) <Lock size={8} className="inline text-slate-400" /></th>
                         <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30">NG (m³)</th>
                         <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30">Diesel Hour</th>
                         <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30">NG Hour</th>
-                        <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30">Total Hour</th>
+                        <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30">Total Hour <Lock size={8} className="inline text-slate-400" /></th>
                         <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30">Steam</th>
                       </React.Fragment>
                     ))}
@@ -877,13 +876,19 @@ export default function BoilerGeneratorCompressorForm({
                       {generators.map(g => (
                         <React.Fragment key={`row-${month}-${g.id}`}>
                           <td className="px-1 py-1 border-l border-slate-200">
-                            <input type="text" inputMode="decimal" value={row.genDieselValues?.[g.id] || ''} onChange={(e) => updateNestedQty(month, 'genDieselValues', g.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                            <div className="w-16 px-1 py-1 text-right bg-slate-100/50 text-slate-600 text-xs rounded border border-transparent flex items-center justify-end gap-1">
+                              {fmt(n(row.genDieselValues?.[g.id]), 2)}
+                              <Lock size={10} className="text-slate-400 opacity-50" />
+                            </div>
                           </td>
                           <td className="px-1 py-1">
                             <input type="text" inputMode="decimal" value={row.genRunningHourValues?.[g.id] || ''} onChange={(e) => updateNestedQty(month, 'genRunningHourValues', g.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
                           </td>
                           <td className="px-1 py-1">
-                            <input type="text" inputMode="decimal" value={row.genElectricityValues?.[g.id] || ''} onChange={(e) => updateNestedQty(month, 'genElectricityValues', g.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                            <div className="w-16 px-1 py-1 text-right bg-slate-100/50 text-slate-600 text-xs rounded border border-transparent flex items-center justify-end gap-1">
+                              {fmt(n(row.genElectricityValues?.[g.id]), 2)}
+                              <Lock size={10} className="text-slate-400 opacity-50" />
+                            </div>
                           </td>
                         </React.Fragment>
                       ))}
@@ -899,7 +904,10 @@ export default function BoilerGeneratorCompressorForm({
                       {boilers.map(b => (
                         <React.Fragment key={`row-${month}-${b.id}`}>
                           <td className="px-1 py-1 border-l border-slate-200">
-                            <input type="text" inputMode="decimal" value={row.boilerDieselValues?.[b.id] || ''} onChange={(e) => updateNestedQty(month, 'boilerDieselValues', b.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                            <div className="w-16 px-1 py-1 text-right bg-slate-100/50 text-slate-600 text-xs rounded border border-transparent flex items-center justify-end gap-1">
+                              {fmt(n(row.boilerDieselValues?.[b.id]), 2)}
+                              <Lock size={10} className="text-slate-400 opacity-50" />
+                            </div>
                           </td>
                           <td className="px-1 py-1">
                             <input type="text" inputMode="decimal" value={row.boilerNgValues?.[b.id] || ''} onChange={(e) => updateNestedQty(month, 'boilerNgValues', b.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
