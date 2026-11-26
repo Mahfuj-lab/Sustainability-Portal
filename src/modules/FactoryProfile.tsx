@@ -56,11 +56,10 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
   activeSubModule, selectedUnit, unitFullName, userRole, restGet, restSet 
 }) => {
   const isViewer = userRole === 'viewer';
-  const [loading, setLoading] = useState(false); // Start false to render UI immediately
+  const [loading, setLoading] = useState(false); 
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   
-  // Data State initialized safely
   const [basicInfo, setBasicInfo] = useState<any>({});
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [premises, setPremises] = useState<any>({});
@@ -68,15 +67,13 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
   const [floors, setFloors] = useState<Floor[]>(getInitialFloors);
   const [machines, setMachines] = useState<Machine[]>(getInitialMachines);
   
-  // Custom Fields State
   const [customBasic, setCustomBasic] = useState<CustomField[]>([]);
   const [customPremises, setCustomPremises] = useState<CustomField[]>([]);
   const [customWorking, setCustomWorking] = useState<CustomField[]>([]);
 
-  // Process Checkboxes
   const processOptions = ["Knitting", "Dyeing", "Washing", "Cutting", "Sewing", "Finishing", "Printing", "Embroidery"];
 
-  // Load Data safely
+  // Data Fetching (Removed restGet from dependency array)
   useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
@@ -104,7 +101,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
             setMachines(Array.isArray(data.machines) && data.machines.length > 0 ? data.machines : getInitialMachines());
           }
         } else if (isMounted) {
-          // If no data (null/undefined), reset to safe defaults based on active sub-module
           if (activeSubModule === 'fp_basic_info') {
             setBasicInfo({}); setContacts([]); setCustomBasic([]);
           } else if (activeSubModule === 'fp_premises') {
@@ -125,9 +121,8 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
     };
     fetchData();
     return () => { isMounted = false; };
-  }, [selectedUnit, activeSubModule, restGet]);
+  }, [selectedUnit, activeSubModule]);
 
-  // Save Data
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -157,7 +152,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
     }
   };
 
-  // Helpers
   const handleBasicChange = (key: string, val: any) => setBasicInfo((prev: any) => ({ ...prev, [key]: val }));
   const handlePremisesChange = (key: string, val: any) => setPremises((prev: any) => ({ ...prev, [key]: val }));
   const handleWorkingChange = (key: string, val: any) => setWorkingHour((prev: any) => ({ ...prev, [key]: val }));
@@ -206,7 +200,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* HEADER BANNER */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 mb-1 uppercase tracking-wide">
@@ -222,7 +215,7 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
         {!isViewer && (
           <button 
             onClick={handleSave} 
-            disabled={saving || loading}
+            disabled={saving}
             className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors"
           >
             <Save size={16} /> {saving ? 'Saving...' : 'Save Data'}
@@ -236,16 +229,15 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
         </div>
       )}
 
-      {/* CONTENT AREA */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-8 relative">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-8 relative min-h-[400px]">
         
+        {/* Subtle Loading Indicator (does not block inputs) */}
         {loading && (
-          <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-xl">
-            <div className="animate-pulse text-emerald-600 text-sm font-medium">Syncing with Firestore...</div>
+          <div className="absolute top-0 left-0 w-full h-1 bg-emerald-100 overflow-hidden rounded-t-xl">
+            <div className="w-full h-full bg-emerald-500 animate-pulse"></div>
           </div>
         )}
 
-        {/* ================= BASIC INFO ================= */}
         {activeSubModule === 'fp_basic_info' && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -255,7 +247,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
               <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Name of the Owner</label><input disabled={isViewer} value={basicInfo?.owner || ''} onChange={e => handleBasicChange('owner', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 outline-none focus:border-emerald-500" /></div>
             </div>
 
-            {/* Contact Persons */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-bold text-gray-800 border-b pb-2 flex-1">Factory Contact Persons</h3>
@@ -274,7 +265,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
               </div>
             </div>
 
-            {/* Processes */}
             <div>
               <h3 className="text-sm font-bold text-gray-800 mb-3 border-b pb-2">Process</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -290,7 +280,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
               </div>
             </div>
 
-            {/* Standard Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Years in Operation (Establishment Year)</label><input disabled={isViewer} value={basicInfo?.yearsOperation || ''} onChange={e => handleBasicChange('yearsOperation', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
               <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Number of Line/Table</label><input disabled={isViewer} value={basicInfo?.lines || ''} onChange={e => handleBasicChange('lines', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
@@ -316,7 +305,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
               <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">How Many Contract Workers</label><input disabled={isViewer} value={basicInfo?.contractCount || ''} onChange={e => handleBasicChange('contractCount', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
             </div>
 
-            {/* Custom Fields */}
             <div className="border-t pt-6">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-bold text-gray-800">Additional Custom Fields</h3>
@@ -335,7 +323,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
           </>
         )}
 
-        {/* ================= PREMISES ================= */}
         {activeSubModule === 'fp_premises' && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -368,7 +355,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
               <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Factory Area (SFT & SQM)</label><input disabled={isViewer} value={premises?.totalFactoryArea || ''} onChange={e => handlePremisesChange('totalFactoryArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
             </div>
 
-            {/* Custom Fields */}
             <div className="border-t pt-6 mt-6">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-bold text-gray-800">Additional Area / Custom Fields</h3>
@@ -387,7 +373,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
           </>
         )}
 
-        {/* ================= WORKING HOUR ================= */}
         {activeSubModule === 'fp_working_hour' && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -400,7 +385,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
               <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Overtime Payment Date</label><input disabled={isViewer} value={workingHour?.overtimeDate || ''} onChange={e => handleWorkingChange('overtimeDate', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
             </div>
 
-            {/* Custom Fields */}
             <div className="border-t pt-6 mt-6">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-bold text-gray-800">Additional Custom Fields</h3>
@@ -419,7 +403,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
           </>
         )}
 
-        {/* ================= FLOOR AT A GLANCE ================= */}
         {activeSubModule === 'fp_floor_glance' && (
           <div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -454,7 +437,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
           </div>
         )}
 
-        {/* ================= MACHINERY LIST ================= */}
         {activeSubModule === 'fp_machinery_list' && (
           <div>
             <div className="overflow-x-auto rounded-lg border border-gray-200">
@@ -501,6 +483,14 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
                 <Plus size={16} /> Add Machine Row
               </button>
             )}
+          </div>
+        )}
+        
+        {/* Fallback if submodule is unknown */}
+        {!['fp_basic_info', 'fp_premises', 'fp_working_hour', 'fp_floor_glance', 'fp_machinery_list'].includes(activeSubModule) && (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+            <Factory size={48} className="text-gray-300 mb-4" />
+            <p className="text-sm">Select a sub-module from the sidebar to view details.</p>
           </div>
         )}
 
