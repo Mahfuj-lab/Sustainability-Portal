@@ -316,17 +316,7 @@ const MODULES = [
       { id: 'doc_fire_safety', label: 'Fire, Health & Safety' },
     ],
   },
-      id: 'mcd_data_management',
-      label: 'MCD Data Management',
-      icon: Globe,
-      subModules: [{ id: 'mcd_overview', label: 'Overview (Coming Soon)' }]
-    },
-    {
-      id: 'documents',
-      label: 'Documents',
-      icon: FolderOpen,
-      subModules: [{ id: 'documents_overview', label: 'Overview (Coming Soon)' }]
-    },
+     
 
 ];
 
@@ -1083,45 +1073,7 @@ const App: React.FC = () => {
               restSet={restSet}
             />
           )}
-              activeSubModule={activeModule}
-              selectedUnit={factory}
-              selectedYear={year.toString()}
-              userRole={user?.role || 'viewer'}
-            />
-          )}
-
-          {/* PLACEHOLDER FOR OTHER NEW MODULES */}
-          {activeRoute && !activeModule.startsWith('inv_') && !activeModule.startsWith('fp_') && (
-
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 min-h-[60vh] flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mb-6">
-                <Factory className="text-emerald-600" size={32} />
-              </div>
-              <h2 className="text-xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
-                {activeRoute.mainModule.label} <ChevronRight size={18} className="text-gray-400" /> {activeRoute.subModule.label}
-              </h2>
-              <p className="text-sm text-gray-500 max-w-md mb-8">
-                This is a clean placeholder for the new module. You can start building forms, data tables, and analytics here.
-              </p>
-              <div className="flex flex-wrap justify-center gap-4 mb-8">
-                <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
-                  <span className="text-xs text-gray-500 uppercase font-semibold">Unit</span>
-                  <div className="text-sm font-bold text-gray-800">{factory}</div>
-                </div>
-                <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
-                  <span className="text-xs text-gray-500 uppercase font-semibold">Year</span>
-                  <div className="text-sm font-bold text-gray-800">{year}</div>
-                </div>
-                <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
-                  <span className="text-xs text-gray-500 uppercase font-semibold">Module ID</span>
-                  <div className="text-sm font-bold text-emerald-600 font-mono">{activeRoute.subModule.id}</div>
-                </div>
-              </div>
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-100">
-                <Check size={14} /> Ready for implementation
-              </div>
-            </div>
-          )}
+             
         </main>
       </div>
 
