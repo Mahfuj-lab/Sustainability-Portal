@@ -171,7 +171,7 @@ const UNIT_FULL_NAMES: Record<string, string> = {
   'ESL': 'Epyllion Style Ltd.',
   'ESL-Extention': 'Epyllion Style Ltd.(Extention)',
   'EFL': 'Epyllion Fabrics Ltd.',
-  'EKL': 'Epyllion Knitwears Ltd.',
+  'EKL': 'Epyllion Knitex Ltd.',
   'EPL': 'Epyllion Limited.',
   'EWL': 'Epyllion Washing Ltd.'
 };
