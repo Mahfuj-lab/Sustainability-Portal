@@ -1,4 +1,5 @@
 import React from 'react';
+import ProductionOperationsForm from './ProductionOperationsForm';
 import { 
   Factory, Zap, Flame, BarChart3, Droplets, Trash2, 
   Wind, Beaker, Activity, Shield, Settings, Info,
@@ -98,6 +99,9 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({
   };
 
   const Icon = currentModule.icon;
+  if (activeSubModule === 'inv_production_operations') {
+    return <ProductionOperationsForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
+  }
 
   return (
     <div className="space-y-6">
