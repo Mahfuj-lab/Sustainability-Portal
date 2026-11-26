@@ -37,6 +37,17 @@ const SUB_MODULES_MAP: Record<string, { title: string; icon: React.ElementType; 
     icon: Flame,
     description: 'Log natural gas usage, diesel for generators/boilers, and vehicle fuel consumption.'
   },
+    'inv_steam_boiler': {
+    title: 'Boiler & Generator',
+    icon: Flame,
+    description: 'Track boiler & generator capacity, fuel consumption, operating hours, and maintenance records.'
+  },
+  'inv_solid_waste': {
+    title: 'Waste Management',
+    icon: Factory,
+    description: 'Track hazardous, non-hazardous, and recyclable solid waste generation and disposal records.'
+  },
+
   'inv_ghg_emission': { 
     title: 'GHG Emission', 
     icon: BarChart3,
