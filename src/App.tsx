@@ -404,7 +404,7 @@ const App: React.FC = () => {
    const themeConfig = THEMES.find(t => t.id === currentTheme) || THEMES[0];
   
   const [activeModule, setActiveModule] = useState<string>('factory_profile_overview');
-  const [expandedModules, setExpandedModules] = useState<string[]>(['factory_profile', 'inventory_mgmt']);
+  const [expandedModules, setExpandedModules] = useState<string[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [energyRows, setEnergyRows] = useState<EnergyRow[]>([]);
