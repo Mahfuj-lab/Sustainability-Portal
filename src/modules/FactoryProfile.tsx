@@ -3,6 +3,8 @@ import {
   Plus, Trash2, Save, CheckCircle2, 
   Factory, Layers, Download
 } from 'lucide-react';
+// @ts-ignore
+import { UNIT_DIRECTORY } from '../utils/unitDirectory';
 
 // ============================================================
 // PROPS
@@ -155,7 +157,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
   const generatePDF = async () => {
     setExporting(true);
     try {
-      // 1. Fetch all modules (fallback to empty if not found)
       const [basicData, premisesData, workingData, floorsData, machinesData] = await Promise.all([
         restGet(`units/${selectedUnit}/factory_profile/fp_basic_info`),
         restGet(`units/${selectedUnit}/factory_profile/fp_premises`),
@@ -164,14 +165,12 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
         restGet(`units/${selectedUnit}/factory_profile/fp_machinery_list`)
       ]);
 
-      // 2. Merge with active unsaved state
       const exportBasic = activeSubModule === 'fp_basic_info' ? { basicInfo, contacts, customFields: customBasic } : (basicData || {});
       const exportPremises = activeSubModule === 'fp_premises' ? { premises, customFields: customPremises } : (premisesData || {});
       const exportWorking = activeSubModule === 'fp_working_hour' ? { workingHour, customFields: customWorking } : (workingData || {});
       const exportFloors = activeSubModule === 'fp_floor_glance' ? { floors } : (floorsData || { floors: getInitialFloors() });
       const exportMachines = activeSubModule === 'fp_machinery_list' ? { machines } : (machinesData || { machines: getInitialMachines() });
 
-      // 3. Build HTML
       const bInfo = exportBasic.basicInfo || {};
       const bContacts = exportBasic.contacts || [];
       const bCustom = exportBasic.customFields || [];
@@ -181,6 +180,13 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
       const wCustom = exportWorking.customFields || [];
       const fData = exportFloors.floors || [];
       const mData = exportMachines.machines || [];
+
+      // Resolve full name and address from directory
+      const fullUnitName = UNIT_DIRECTORY[selectedUnit]?.fullName || unitFullName || selectedUnit;
+      const fullUnitAddress = UNIT_DIRECTORY[selectedUnit]?.address || '';
+      
+      // The Epyllion Logo URL (fallback to the portal's standard URL)
+      const logoSrc = window.location.origin + '/epyllion.png'; // Or use 'https://i.ibb.co/8nj060LX/epyllion.png'
 
       const renderRow = (label: string, value: any) => `
         <tr>
@@ -200,20 +206,29 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
                 .page-break { page-break-before: always; }
               }
               body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; color: #0f172a; }
-              .header { text-align: center; border-bottom: 2px solid #10b981; padding-bottom: 15px; margin-bottom: 20px; }
-              .header h1 { margin: 0; font-size: 22px; color: #065f46; text-transform: uppercase; letter-spacing: 1px; }
-              .header h2 { margin: 5px 0 0 0; font-size: 14px; color: #475569; font-weight: normal; }
-              .header .date { margin-top: 10px; font-size: 10px; color: #64748b; }
+              .header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #10b981; padding-bottom: 15px; margin-bottom: 20px; }
+              .header-left { flex: 1; }
+              .header-logo { width: 120px; height: auto; }
+              .header-title { margin: 0; font-size: 22px; color: #065f46; text-transform: uppercase; letter-spacing: 1px; }
+              .header-subtitle { margin: 3px 0 0 0; font-size: 12px; color: #475569; font-weight: bold; }
+              .header-address { margin: 3px 0 0 0; font-size: 10px; color: #64748b; }
+              .header-meta { margin-top: 10px; font-size: 10px; color: #64748b; }
               .section-title { font-size: 14px; font-weight: bold; color: #065f46; background-color: #ecfdf5; padding: 6px 10px; border-left: 4px solid #10b981; margin: 20px 0 10px 0; text-transform: uppercase; }
               table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
               th { border: 1px solid #cbd5e1; padding: 6px 10px; background-color: #f1f5f9; font-size: 10px; text-align: left; color: #475569; }
             </style>
           </head>
           <body>
-            <div class="header">
-              <h1>${unitFullName || selectedUnit}</h1>
-              <h2>Unit Code: ${selectedUnit} | FACTORY PROFILE</h2>
-              <div class="date">Exported on: ${new Date().toLocaleString()}</div>
+            <div class="header-container">
+              <div class="header-left">
+                <h1 class="header-title">${fullUnitName}</h1>
+                <h2 class="header-subtitle">Unit Code: ${selectedUnit} | FACTORY PROFILE</h2>
+                ${fullUnitAddress ? `<p class="header-address">${fullUnitAddress}</p>` : ''}
+                <div class="header-meta">Exported on: ${new Date().toLocaleString()}</div>
+              </div>
+              <div class="header-right">
+                <img src="${logoSrc}" onerror="this.style.display='none'" alt="Epyllion Group Logo" class="header-logo" />
+              </div>
             </div>
 
             <!-- SECTION 1: BASIC INFO -->
