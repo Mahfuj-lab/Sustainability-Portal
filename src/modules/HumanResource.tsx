@@ -1,4 +1,4 @@
-```tsx
+
 import React, { useMemo } from 'react';
 import {
   Users,
@@ -359,4 +359,4 @@ export default function HumanResource({
     </div>
   );
 }
-```
+
