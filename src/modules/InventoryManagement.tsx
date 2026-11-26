@@ -1,4 +1,5 @@
 import React from 'react';
+import PurchaseElectricitySolarForm from './PurchaseElectricitySolarForm';
 import ProductionOperationsForm from './ProductionOperationsForm';
 import { 
   Factory, Zap, Flame, BarChart3, Droplets, Trash2, 
@@ -102,6 +103,9 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({
   if (activeSubModule === 'inv_production_operations') {
     return <ProductionOperationsForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
   }
+if (activeSubModule === 'inv_electricity_solar') {
+  return <PurchaseElectricitySolarForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
+}
 
   return (
     <div className="space-y-6">
