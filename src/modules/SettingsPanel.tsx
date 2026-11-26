@@ -153,7 +153,7 @@ interface AlertRules {
 }
 
 export interface SettingsPanelProps {
-  currentThemeId: ThemeKey;
+  currentThemeId: string;
   onThemeChange: (newTheme: any) => void;
   theme?: any;
   userRole?: string;
