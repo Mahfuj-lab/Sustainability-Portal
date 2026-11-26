@@ -218,7 +218,7 @@ const MODULES = [
       { id: 'fp_working_hour', label: 'Working Hour & Payment System' },
       { id: 'fp_floor_glance', label: 'Floor At a Glance' },
       { id: 'fp_machinery_list', label: 'Machinery List' }
-    ] subModules: [{ id: 'factory_profile_overview', label: 'Overview (Coming Soon)' }]
+    ] 
   },
   { 
     id: 'inventory_mgmt', 
