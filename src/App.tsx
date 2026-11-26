@@ -1082,7 +1082,6 @@ const App: React.FC = () => {
             <FactoryProfile
               activeSubModule={activeModule}
               selectedUnit={factory}
-              selectedYear={year.toString()}
               userRole={user?.role || 'viewer'}
               restGet={restGet}
             />
