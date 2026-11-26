@@ -136,7 +136,6 @@ export default function NaturalGasDieselVehiclesForm({
   });
 
   useEffect(() => {
-    // Load own data
     try {
       const stored = localStorage.getItem(storageKey);
       if (stored) {
@@ -190,7 +189,6 @@ export default function NaturalGasDieselVehiclesForm({
       setData(initialData);
     }
 
-    // Load cross-module ratio data
     try {
       const elecStored = localStorage.getItem(elecSolarKey);
       if (elecStored) {
@@ -306,7 +304,7 @@ export default function NaturalGasDieselVehiclesForm({
     return combined > 0 ? (gen / combined) * 100 : 0;
   };
   
-  const getTotalDomDiesel = (month: string, row: MonthData) => getDomDiesel(month, row); // same as section 2 dom
+  const getTotalDomDiesel = (month: string, row: MonthData) => getDomDiesel(month, row);
   const getTotalProdDiesel = (month: string, row: MonthData) => getProdDiesel(month, row) + getTotalBoilerDiesel(row);
 
   const getYearlySum = (getter: (m: string, r: MonthData) => number) => {
@@ -343,25 +341,33 @@ export default function NaturalGasDieselVehiclesForm({
     }
 
     if (sections.diesel) {
-      const dCols = generators.length + boilers.length + (sections.genPct ? 1 : 0) + 4 + (sections.includeTK ? 1 : 0);
-      row1 += `<th colspan="${dCols}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-weight: bold;">GENERATOR & BOILER DIESEL (L)</th>`;
+      const genCols = generators.length + 3;
+      row1 += `<th colspan="${genCols}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-weight: bold;">GENERATOR DIESEL (L)</th>`;
       
       generators.forEach(() => { row2 += `<th style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">&nbsp;</th>`; });
-      boilers.forEach(() => { row2 += `<th style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">&nbsp;</th>`; });
-      
-      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Gen. Total</th>`;
-      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Gen. Dom.</th>`;
-      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Gen. Prod.</th>`;
+      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Total Gen. Diesel</th>`;
+      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Domestic (L)</th>`;
+      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Production (L)</th>`;
+
       if (sections.genPct) {
-        row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #e0e7ff; text-align: center; font-size: 11px;">Gen. (%)</th>`;
+        row1 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #e0e7ff; text-align: center; font-weight: bold;">GEN. DIESEL (%)</th>`;
       }
-      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Boiler Total</th>`;
-      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Combined Total</th>`;
+
+      const boilerCols = boilers.length + 1;
+      row1 += `<th colspan="${boilerCols}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-weight: bold;">BOILER DIESEL (L)</th>`;
+      
+      boilers.forEach(() => { row2 += `<th style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">&nbsp;</th>`; });
+      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Total Boiler Diesel</th>`;
+
+      const combCols = 3 + (sections.includeTK ? 1 : 0);
+      row1 += `<th colspan="${combCols}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-weight: bold;">(BOILER + GENERATOR) TOTAL DIESEL (L)</th>`;
+      
+      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Diesel</th>`;
       if (sections.includeTK) {
         row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Tk</th>`;
       }
-      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Tot. Dom.</th>`;
-      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Tot. Prod.</th>`;
+      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Domestic</th>`;
+      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Production</th>`;
     }
 
     if (sections.vehicles) {
@@ -401,15 +407,17 @@ export default function NaturalGasDieselVehiclesForm({
         generators.forEach(meter => {
           tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.genDieselValues?.[meter.id]), 2)}</td>`;
         });
-        boilers.forEach(meter => {
-          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.boilerDieselValues?.[meter.id]), 2)}</td>`;
-        });
-
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getTotalGenDiesel(row), 2)}</td>`;
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getDomDiesel(m, row), 3)}</td>`;
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getProdDiesel(m, row), 3)}</td>`;
+
         if (sections.genPct) tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getGenPct(row), 4)}</td>`;
+
+        boilers.forEach(meter => {
+          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.boilerDieselValues?.[meter.id]), 2)}</td>`;
+        });
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getTotalBoilerDiesel(row), 2)}</td>`;
+
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getTotalDiesel(row), 2)}</td>`;
         if (sections.includeTK) tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.totalTkDiesel), 2)}</td>`;
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getTotalDomDiesel(m, row), 3)}</td>`;
@@ -449,11 +457,6 @@ export default function NaturalGasDieselVehiclesForm({
         MONTHS.forEach(m => { sum += n(data[m]?.genDieselValues?.[meter.id]); });
         tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(sum, 2)}</td>`;
       });
-      boilers.forEach(meter => {
-        let sum = 0;
-        MONTHS.forEach(m => { sum += n(data[m]?.boilerDieselValues?.[meter.id]); });
-        tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(sum, 2)}</td>`;
-      });
       tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalGenDiesel(r)), 2)}</td>`;
       tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getDomDiesel(m, r)), 3)}</td>`;
       tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getProdDiesel(m, r)), 3)}</td>`;
@@ -465,7 +468,13 @@ export default function NaturalGasDieselVehiclesForm({
         tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(pct, 4)}</td>`;
       }
       
+      boilers.forEach(meter => {
+        let sum = 0;
+        MONTHS.forEach(m => { sum += n(data[m]?.boilerDieselValues?.[meter.id]); });
+        tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(sum, 2)}</td>`;
+      });
       tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalBoilerDiesel(r)), 2)}</td>`;
+      
       tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalDiesel(r)), 2)}</td>`;
       if (sections.includeTK) tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => n(r.totalTkDiesel)), 2)}</td>`;
       tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalDomDiesel(m, r)), 3)}</td>`;
@@ -662,8 +671,26 @@ export default function NaturalGasDieselVehiclesForm({
               )}
 
               {sections.diesel && (
-                <th colSpan={generators.length + boilers.length + (sections.genPct ? 1 : 0) + 4 + (sections.includeTK ? 1 : 0)} className="px-2 py-2 bg-blue-100 text-blue-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Generator &amp; Boiler Diesel (L)
+                <th colSpan={generators.length + 3} className="px-2 py-2 bg-blue-100 text-blue-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
+                  Generator Diesel (L)
+                </th>
+              )}
+
+              {sections.genPct && (
+                <th rowSpan={2} className="px-2 py-2 bg-indigo-100 text-indigo-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
+                  Gen. Diesel (%)
+                </th>
+              )}
+
+              {sections.diesel && (
+                <th colSpan={boilers.length + 1} className="px-2 py-2 bg-blue-100 text-blue-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
+                  Boiler Diesel (L)
+                </th>
+              )}
+
+              {sections.diesel && (
+                <th colSpan={3 + (sections.includeTK ? 1 : 0)} className="px-2 py-2 bg-emerald-100 text-emerald-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
+                  (Boiler + Generator) Total Diesel (L)
                 </th>
               )}
 
@@ -748,6 +775,15 @@ export default function NaturalGasDieselVehiclesForm({
                       </div>
                     </th>
                   ))}
+
+                  <th className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50 border-l border-slate-200">Gen. Total</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50">Gen. Dom.</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50">Gen. Prod.</th>
+                </>
+              )}
+
+              {sections.diesel && (
+                <>
                   {boilers.map((m) => (
                     <th key={m.id} className="px-2 py-1 text-center bg-blue-50 min-w-[100px]">
                       <div className="flex flex-col items-center gap-1">
@@ -776,20 +812,18 @@ export default function NaturalGasDieselVehiclesForm({
                       </div>
                     </th>
                   ))}
+                  <th className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50 border-l border-slate-200">Boiler Total</th>
+                </>
+              )}
 
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50 border-l border-slate-200">Gen. Total</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50">Gen. Dom.</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50">Gen. Prod.</th>
-                  {sections.genPct && (
-                    <th className="px-2 py-2 text-center whitespace-nowrap bg-indigo-50/50">Gen. (%)</th>
-                  )}
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50">Boiler Total</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Combined Total</th>
+              {sections.diesel && (
+                <>
+                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Total Diesel</th>
                   {sections.includeTK && (
-                    <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Total Tk (BDT)</th>
+                    <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total Tk</th>
                   )}
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Tot. Dom.</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Tot. Prod.</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total Dom.</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total Prod.</th>
                 </>
               )}
 
@@ -833,23 +867,34 @@ export default function NaturalGasDieselVehiclesForm({
                           <input type="text" inputMode="decimal" value={row.genDieselValues?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'genDieselValues', m.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
                         </td>
                       ))}
+                      <td className="px-2 py-1 text-right font-bold text-blue-700 bg-blue-50/30 border-l border-slate-200">{fmt(getTotalGenDiesel(row), 2)}</td>
+                      <td className="px-2 py-1 text-right text-blue-700 bg-blue-50/10">{fmt(getDomDiesel(month, row), 3)}</td>
+                      <td className="px-2 py-1 text-right text-blue-700 bg-blue-50/10">{fmt(getProdDiesel(month, row), 3)}</td>
+                    </>
+                  )}
+
+                  {sections.genPct && (
+                    <td className="px-2 py-1 text-right text-indigo-700 bg-indigo-50/30">{fmt(getGenPct(row), 4)}</td>
+                  )}
+
+                  {sections.diesel && (
+                    <>
                       {boilers.map(m => (
                         <td key={`row-${month}-${m.id}`} className="px-1 py-1">
                           <input type="text" inputMode="decimal" value={row.boilerDieselValues?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'boilerDieselValues', m.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
                         </td>
                       ))}
-                      <td className="px-2 py-1 text-right font-bold text-blue-700 bg-blue-50/30 border-l border-slate-200">{fmt(getTotalGenDiesel(row), 2)}</td>
-                      <td className="px-2 py-1 text-right text-blue-700 bg-blue-50/10">{fmt(getDomDiesel(month, row), 3)}</td>
-                      <td className="px-2 py-1 text-right text-blue-700 bg-blue-50/10">{fmt(getProdDiesel(month, row), 3)}</td>
-                      {sections.genPct && (
-                        <td className="px-2 py-1 text-right text-indigo-700 bg-indigo-50/30">{fmt(getGenPct(row), 4)}</td>
-                      )}
                       <td className="px-2 py-1 text-right font-bold text-blue-700 bg-blue-50/30">{fmt(getTotalBoilerDiesel(row), 2)}</td>
+                    </>
+                  )}
+
+                  {sections.diesel && (
+                    <>
                       <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30 border-l border-slate-200">{fmt(getTotalDiesel(row), 2)}</td>
                       {sections.includeTK && (
                         <td className="px-1 py-1 border-l border-slate-200"><input type="text" inputMode="decimal" value={row.totalTkDiesel} onChange={(e) => updateMonthField(month, 'totalTkDiesel', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
                       )}
-                      <td className="px-2 py-1 text-right text-emerald-700 bg-emerald-50/10 border-l border-slate-200">{fmt(getTotalDomDiesel(month, row), 3)}</td>
+                      <td className="px-2 py-1 text-right text-emerald-700 bg-emerald-50/10">{fmt(getTotalDomDiesel(month, row), 3)}</td>
                       <td className="px-2 py-1 text-right text-emerald-700 bg-emerald-50/10">{fmt(getTotalProdDiesel(month, row), 3)}</td>
                     </>
                   )}
@@ -905,25 +950,36 @@ export default function NaturalGasDieselVehiclesForm({
                     MONTHS.forEach(month => { sum += n(data[month]?.genDieselValues?.[m.id]); });
                     return <td key={`tot-${m.id}`} className="px-2 py-2 text-right text-blue-800">{fmt(sum, 2)}</td>;
                   })}
+                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50 border-l border-slate-200">{fmt(getYearlySum((m, r) => getTotalGenDiesel(r)), 2)}</td>
+                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50">{fmt(getYearlySum((m, r) => getDomDiesel(m, r)), 3)}</td>
+                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50">{fmt(getYearlySum((m, r) => getProdDiesel(m, r)), 3)}</td>
+                </>
+              )}
+
+              {sections.genPct && (
+                <td className="px-2 py-2 text-right text-indigo-800 bg-indigo-100/50">
+                  {fmt((getYearlySum((m, r) => getTotalDiesel(r)) > 0 ? (getYearlySum((m, r) => getTotalGenDiesel(r)) / getYearlySum((m, r) => getTotalDiesel(r))) * 100 : 0), 4)}
+                </td>
+              )}
+
+              {sections.diesel && (
+                <>
                   {boilers.map(m => {
                     let sum = 0;
                     MONTHS.forEach(month => { sum += n(data[month]?.boilerDieselValues?.[m.id]); });
                     return <td key={`tot-${m.id}`} className="px-2 py-2 text-right text-blue-800">{fmt(sum, 2)}</td>;
                   })}
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50 border-l border-slate-200">{fmt(getYearlySum((m, r) => getTotalGenDiesel(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50">{fmt(getYearlySum((m, r) => getDomDiesel(m, r)), 3)}</td>
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50">{fmt(getYearlySum((m, r) => getProdDiesel(m, r)), 3)}</td>
-                  {sections.genPct && (
-                    <td className="px-2 py-2 text-right text-indigo-800 bg-indigo-100/50">
-                      {fmt((getYearlySum((m, r) => getTotalDiesel(r)) > 0 ? (getYearlySum((m, r) => getTotalGenDiesel(r)) / getYearlySum((m, r) => getTotalDiesel(r))) * 100 : 0), 4)}
-                    </td>
-                  )}
                   <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50">{fmt(getYearlySum((m, r) => getTotalBoilerDiesel(r)), 2)}</td>
+                </>
+              )}
+
+              {sections.diesel && (
+                <>
                   <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50 border-l border-slate-200">{fmt(getYearlySum((m, r) => getTotalDiesel(r)), 2)}</td>
                   {sections.includeTK && (
                     <td className="px-2 py-2 text-right text-emerald-800 border-l border-slate-200">{fmt(getYearlySum((m, r) => n(r.totalTkDiesel)), 2)}</td>
                   )}
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50 border-l border-slate-200">{fmt(getYearlySum((m, r) => getTotalDomDiesel(m, r)), 3)}</td>
+                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getTotalDomDiesel(m, r)), 3)}</td>
                   <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getTotalProdDiesel(m, r)), 3)}</td>
                 </>
               )}
