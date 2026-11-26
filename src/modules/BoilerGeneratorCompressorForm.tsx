@@ -134,19 +134,20 @@ export default function BoilerGeneratorCompressorForm({
   });
 
   useEffect(() => {
-    // Load cross-module data & own data
     let loadedGenerators: MeterItem[] = [];
     let loadedBoilers: MeterItem[] = [];
+    let storedNgDiesel: any = null;
+    let loadedElecSolar: any = null;
 
     try {
-      const storedNgDiesel = localStorage.getItem(ngDieselKey);
-      if (storedNgDiesel) {
-        const parsed = JSON.parse(storedNgDiesel);
-        if (parsed && Array.isArray(parsed.generators) && parsed.generators.length > 0) {
-          loadedGenerators = parsed.generators.map((g: any) => ({ id: g.id, name: g.name || 'Generator' }));
+      const rawNgDiesel = localStorage.getItem(ngDieselKey);
+      if (rawNgDiesel) {
+        storedNgDiesel = JSON.parse(rawNgDiesel);
+        if (storedNgDiesel && Array.isArray(storedNgDiesel.generators) && storedNgDiesel.generators.length > 0) {
+          loadedGenerators = storedNgDiesel.generators.map((g: any) => ({ id: g.id, name: g.name || 'Generator' }));
         }
-        if (parsed && Array.isArray(parsed.boilers) && parsed.boilers.length > 0) {
-          loadedBoilers = parsed.boilers.map((b: any) => ({ id: b.id, name: b.name || 'Boiler' }));
+        if (storedNgDiesel && Array.isArray(storedNgDiesel.boilers) && storedNgDiesel.boilers.length > 0) {
+          loadedBoilers = storedNgDiesel.boilers.map((b: any) => ({ id: b.id, name: b.name || 'Boiler' }));
         }
         setSyncStatus(prev => ({ ...prev, ngDiesel: true }));
       }
@@ -154,11 +155,10 @@ export default function BoilerGeneratorCompressorForm({
       console.error('Failed to load NG/Diesel sync data', e);
     }
 
-    let loadedElecSolar: any = null;
     try {
-      const storedElec = localStorage.getItem(elecSolarKey);
-      if (storedElec) {
-        loadedElecSolar = JSON.parse(storedElec);
+      const rawElec = localStorage.getItem(elecSolarKey);
+      if (rawElec) {
+        loadedElecSolar = JSON.parse(rawElec);
         setSyncStatus(prev => ({ ...prev, elecSolar: true }));
       }
     } catch (e) {
@@ -176,21 +176,22 @@ export default function BoilerGeneratorCompressorForm({
     setBoilers(loadedBoilers);
 
     // Load own data
+    let parsedOwn: any = null;
     try {
       const stored = localStorage.getItem(storageKey);
       if (stored) {
-        const parsed = JSON.parse(stored);
+        parsedOwn = JSON.parse(stored);
         
-        if (parsed && Array.isArray(parsed.compressors) && parsed.compressors.length > 0) {
-          setCompressors(parsed.compressors);
+        if (parsedOwn && Array.isArray(parsedOwn.compressors) && parsedOwn.compressors.length > 0) {
+          setCompressors(parsedOwn.compressors);
         } else {
           setCompressors([{ id: 'c1', name: 'Compressor 1' }, { id: 'c2', name: 'Compressor 2' }]);
         }
 
-        if (parsed && parsed.data && typeof parsed.data === 'object') {
+        if (parsedOwn && parsedOwn.data && typeof parsedOwn.data === 'object') {
           const validatedData: FormData = {};
           MONTHS.forEach(m => {
-            const rawMonth = parsed.data[m];
+            const rawMonth = parsedOwn.data[m];
             validatedData[m] = rawMonth && typeof rawMonth === 'object' 
               ? {
                   genDieselValues: rawMonth.genDieselValues || {},
@@ -226,37 +227,25 @@ export default function BoilerGeneratorCompressorForm({
       setData(initialData);
     }
 
-    // Auto-fill from cross modules
-    const initialData: FormData = {};
-    MONTHS.forEach(m => { initialData[m] = getEmptyMonth(); });
-    
-    // We need to prefill based on cross module data if available
-    // We'll do this in a separate effect or just during initial load to avoid overriding user edits
-    // Better to sync once on load
+    // Merge cross-module data
     if (loadedGenerators.length > 0 && loadedBoilers.length > 0) {
       try {
-        const stored = localStorage.getItem(storageKey);
-        const parsedOwn = stored ? JSON.parse(stored) : null;
+        const initialData: FormData = {};
+        MONTHS.forEach(m => { initialData[m] = getEmptyMonth(); });
         
         MONTHS.forEach(m => {
           const ownMonth = parsedOwn?.data?.[m] || {};
           
           loadedGenerators.forEach(g => {
-            const ngDieselRow = parsedOwn ? null : null; // placeholder
-            // Find in ngDiesel
             let genDiesel = '';
             let genElec = '';
-            if (storedNgDiesel) {
-              const nd = JSON.parse(storedNgDiesel);
-              if (nd.data?.[m]?.genDieselValues?.[g.id]) {
-                genDiesel = nd.data[m].genDieselValues[g.id];
-              }
+            if (storedNgDiesel && storedNgDiesel.data?.[m]?.genDieselValues?.[g.id]) {
+              genDiesel = storedNgDiesel.data[m].genDieselValues[g.id];
             }
-            if (loadedElecSolar) {
-              if (loadedElecSolar.data?.[m]?.generators?.[g.id]) {
-                genElec = loadedElecSolar.data[m].generators[g.id];
-              }
+            if (loadedElecSolar && loadedElecSolar.data?.[m]?.generators?.[g.id]) {
+              genElec = loadedElecSolar.data[m].generators[g.id];
             }
+            
             if (!ownMonth.genDieselValues?.[g.id] && genDiesel) {
               initialData[m].genDieselValues[g.id] = genDiesel;
             } else if (ownMonth.genDieselValues?.[g.id]) {
@@ -276,11 +265,8 @@ export default function BoilerGeneratorCompressorForm({
           
           loadedBoilers.forEach(b => {
             let bDiesel = '';
-            if (storedNgDiesel) {
-              const nd = JSON.parse(storedNgDiesel);
-              if (nd.data?.[m]?.boilerDieselValues?.[b.id]) {
-                bDiesel = nd.data[m].boilerDieselValues[b.id];
-              }
+            if (storedNgDiesel && storedNgDiesel.data?.[m]?.boilerDieselValues?.[b.id]) {
+              bDiesel = storedNgDiesel.data[m].boilerDieselValues[b.id];
             }
             if (!ownMonth.boilerDieselValues?.[b.id] && bDiesel) {
               initialData[m].boilerDieselValues[b.id] = bDiesel;
@@ -306,9 +292,8 @@ export default function BoilerGeneratorCompressorForm({
           if (ownMonth.compAir) initialData[m].compAir = ownMonth.compAir;
           if (ownMonth.remarks) initialData[m].remarks = ownMonth.remarks;
           
-          // compressors
-          if (ownMonth.compElecValues) {
-            initialData[m].compElecValues = { ...ownMonth.compElecValues };
+          if (ownMonth.compElecValues && typeof ownMonth.compElecValues === 'object') {
+            initialData[m].compElecValues = { ...(ownMonth.compElecValues as Record<string, any>) };
           }
         });
         
@@ -423,31 +408,6 @@ export default function BoilerGeneratorCompressorForm({
       </div>
     `;
 
-    // Build headers with appropriate colspans
-    let row1 = `<tr><th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6;">Month</th>`;
-    let row2 = `<tr>`;
-
-    if (sections.generator) {
-      // Each generator: diesel, running hour, electricity = 3 cols per generator
-      // Plus totals: diesel total, run hour total, elec total, intensity = 4 cols
-      const genCols = generators.length * 3 + 4;
-      row1 += `<th colspan="${genCols}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-weight: bold;">GENERATOR DATA</th>`;
-      
-      generators.forEach(g => {
-        row2 += `<th colspan="3" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">${g.name}</th>`;
-      });
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Diesel</th>`;
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Run Hour</th>`;
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Elec (kWh)</th>`;
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Intensity (kWh/L)</th>`;
-      
-      // Second row for generator: diesel, run hour, elec
-      // We need to add the second row's generator columns
-      // Actually row2 is the sub-headers for generator columns, but we need 3 sub-cols per generator
-      // So we need a row3 for that
-    }
-
-    // Let's redo the header structure with 3 rows for generator and boiler, 2 rows for compressor
     let headerRow1 = `<tr><th rowSpan="3" style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6;">Month</th>`;
     let headerRow2 = `<tr>`;
     let headerRow3 = `<tr>`;
@@ -470,7 +430,6 @@ export default function BoilerGeneratorCompressorForm({
     }
 
     if (sections.boiler) {
-      // Each boiler: diesel, ng, diesel hour, ng hour, total hour, steam = 6 cols
       const boilerCols = boilers.length * 6 + 3;
       headerRow1 += `<th colspan="${boilerCols}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-weight: bold;">BOILER DATA</th>`;
       
@@ -492,7 +451,6 @@ export default function BoilerGeneratorCompressorForm({
     }
 
     if (sections.compressor) {
-      // Each compressor: electricity = 1 col per compressor + 3 totals
       const compCols = compressors.length + 3;
       headerRow1 += `<th colspan="${compCols}" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-weight: bold;">COMPRESSOR</th>`;
       
@@ -512,7 +470,6 @@ export default function BoilerGeneratorCompressorForm({
     headerRow2 += `</tr>`;
     headerRow3 += `</tr>`;
     
-    // If no generator/boiler sections, we don't need row3
     const hasRow3 = sections.generator || sections.boiler;
     const tableHeadersHtml = headerRow1 + headerRow2 + (hasRow3 ? headerRow3 : '');
 
