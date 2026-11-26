@@ -247,7 +247,7 @@ const MODULES = [
       {
       id: 'long_term_strategy',
       label: 'Long Term Strategy',
-      icon: Compass,
+      icon: Target,
       subModules: [{ id: 'long_term_overview', label: 'Overview (Coming Soon)' }]
     },
     {
