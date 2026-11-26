@@ -966,6 +966,11 @@ const App: React.FC = () => {
                         </tr>
                       ))}
                     </tbody>
+                                      </table>
+                </div>
+              </div>
+            )}
+
                            {activeModule.startsWith('kpi_') && (
             <KpiManagement
               activeSubModule={activeModule}
