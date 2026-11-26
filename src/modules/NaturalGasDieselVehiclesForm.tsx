@@ -126,7 +126,13 @@ export default function NaturalGasDieselVehiclesForm({
   const [elecRatio, setElecRatio] = useState<Record<string, { dom: number; prod: number }>>({});
   const [isSaved, setIsSaved] = useState(false);
   
-  const [energyFactors, setEnergyFactors] = useState({ ngMjPerM3: 38.30, dieselMjPerLiter: 35.80 });
+  const [energyFactors, setEnergyFactors] = useState({ 
+    ngMjPerM3: 38.30, 
+    ngKwhPerM3: 10.64, 
+    dieselMjPerLiter: 35.80 
+  });
+  
+  const [ngEnergyUnit, setNgEnergyUnit] = useState<'MJ' | 'kWh'>('MJ');
 
   const [sections, setSections] = useState({
     ng: true,
@@ -134,18 +140,20 @@ export default function NaturalGasDieselVehiclesForm({
     genPct: true,
     vehicles: true,
     includeTK: true,
+    showEnergy: true,
     remarks: true,
   });
 
   useEffect(() => {
     // Load factors
     try {
-      const storedFactors = localStorage.getItem('energy_factors_by_year');
+      const storedFactors = localStorage.getItem('sustainability_factors_by_year');
       if (storedFactors) {
         const parsed = JSON.parse(storedFactors);
         if (parsed && parsed[safeYear]) {
           setEnergyFactors({
             ngMjPerM3: parsed[safeYear].ngMjPerM3 || 38.30,
+            ngKwhPerM3: parsed[safeYear].ngKwhPerM3 || 10.64,
             dieselMjPerLiter: parsed[safeYear].dieselMjPerLiter || 35.80,
           });
         }
@@ -300,8 +308,12 @@ export default function NaturalGasDieselVehiclesForm({
 
   // Calculations
   const getTotalNG = (row: MonthData) => ngMeters.reduce((sum, m) => sum + n(row.ngValues?.[m.id]), 0);
-  const getTotalNGMj = (row: MonthData) => getTotalNG(row) * energyFactors.ngMjPerM3;
   
+  const getTotalNGEnergy = (row: MonthData) => {
+    const total = getTotalNG(row);
+    return ngEnergyUnit === 'MJ' ? total * energyFactors.ngMjPerM3 : total * energyFactors.ngKwhPerM3;
+  };
+
   const getTotalGenDiesel = (row: MonthData) => generators.reduce((sum, m) => sum + n(row.genDieselValues?.[m.id]), 0);
   const getTotalBoilerDiesel = (row: MonthData) => boilers.reduce((sum, m) => sum + n(row.boilerDieselValues?.[m.id]), 0);
   
@@ -345,7 +357,9 @@ export default function NaturalGasDieselVehiclesForm({
         <p style="margin: 0; font-size: 12px; color: #555;">${unitInfo.address}</p>
         <p style="margin: 8px 0 2px 0; font-size: 14px; font-weight: bold;">${title}</p>
         <p style="margin: 0; font-size: 12px; font-weight: bold; color: #065f46;">Reporting Year: ${safeYear}</p>
-        <p style="margin: 4px 0 0 0; font-size: 11px; color: #555;">NG Factor: ${energyFactors.ngMjPerM3} MJ/m³ | Diesel Factor: ${energyFactors.dieselMjPerLiter} MJ/L</p>
+        <p style="margin: 4px 0 0 0; font-size: 11px; color: #555;">
+          NG Factors: ${energyFactors.ngMjPerM3} MJ/m³ / ${energyFactors.ngKwhPerM3} kWh/m³ | Diesel Factor: ${energyFactors.dieselMjPerLiter} MJ/L
+        </p>
       </div>
     `;
 
@@ -355,10 +369,13 @@ export default function NaturalGasDieselVehiclesForm({
     let row2 = `<tr>`;
 
     if (sections.ng) {
-      row1 += `<th colspan="${ngMeters.length + 2 + (sections.includeTK ? 1 : 0)}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-weight: bold;">NATURAL GAS (m³)</th>`;
+      const ngCols = ngMeters.length + 1 + (sections.showEnergy ? 1 : 0) + (sections.includeTK ? 1 : 0);
+      row1 += `<th colspan="${ngCols}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-weight: bold;">NATURAL GAS (m³)</th>`;
       ngMeters.forEach(() => { row2 += `<th style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">&nbsp;</th>`; });
       row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total NG (m³)</th>`;
-      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total NG (MJ)</th>`;
+      if (sections.showEnergy) {
+        row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total NG (${ngEnergyUnit})</th>`;
+      }
       if (sections.includeTK) {
         row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Tk</th>`;
       }
@@ -383,11 +400,13 @@ export default function NaturalGasDieselVehiclesForm({
       boilers.forEach(() => { row2 += `<th style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">&nbsp;</th>`; });
       row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Total Boiler Diesel</th>`;
 
-      const combCols = 4 + (sections.includeTK ? 1 : 0);
+      const combCols = 3 + (sections.showEnergy ? 1 : 0) + (sections.includeTK ? 1 : 0);
       row1 += `<th colspan="${combCols}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-weight: bold;">(BOILER + GENERATOR) TOTAL DIESEL (L)</th>`;
       
       row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Diesel (L)</th>`;
-      row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Diesel (MJ)</th>`;
+      if (sections.showEnergy) {
+        row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Diesel (MJ)</th>`;
+      }
       if (sections.includeTK) {
         row2 += `<th rowSpan="${monthRowSpan}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Tk</th>`;
       }
@@ -425,7 +444,9 @@ export default function NaturalGasDieselVehiclesForm({
           tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.ngValues?.[meter.id]), 2)}</td>`;
         });
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getTotalNG(row), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getTotalNGMj(row), 2)}</td>`;
+        if (sections.showEnergy) {
+          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getTotalNGEnergy(row), 2)}</td>`;
+        }
         if (sections.includeTK) tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.totalTkNG), 2)}</td>`;
       }
 
@@ -445,7 +466,9 @@ export default function NaturalGasDieselVehiclesForm({
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getTotalBoilerDiesel(row), 2)}</td>`;
 
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getTotalDiesel(row), 2)}</td>`;
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getTotalDieselMj(row), 2)}</td>`;
+        if (sections.showEnergy) {
+          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getTotalDieselMj(row), 2)}</td>`;
+        }
         if (sections.includeTK) tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(n(row.totalTkDiesel), 2)}</td>`;
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getTotalDomDiesel(m, row), 3)}</td>`;
         tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getTotalProdDiesel(m, row), 3)}</td>`;
@@ -475,7 +498,9 @@ export default function NaturalGasDieselVehiclesForm({
         tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(sum, 2)}</td>`;
       });
       tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalNG(r)), 2)}</td>`;
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalNGMj(r)), 2)}</td>`;
+      if (sections.showEnergy) {
+        tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalNGEnergy(r)), 2)}</td>`;
+      }
       if (sections.includeTK) tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => n(r.totalTkNG)), 2)}</td>`;
     }
 
@@ -504,7 +529,9 @@ export default function NaturalGasDieselVehiclesForm({
       tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalBoilerDiesel(r)), 2)}</td>`;
       
       tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalDiesel(r)), 2)}</td>`;
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalDieselMj(r)), 2)}</td>`;
+      if (sections.showEnergy) {
+        tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalDieselMj(r)), 2)}</td>`;
+      }
       if (sections.includeTK) tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => n(r.totalTkDiesel)), 2)}</td>`;
       tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalDomDiesel(m, r)), 3)}</td>`;
       tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum((m, r) => getTotalProdDiesel(m, r)), 3)}</td>`;
@@ -610,7 +637,7 @@ export default function NaturalGasDieselVehiclesForm({
               Reporting Year: {safeYear}
             </span>
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">
-              Factors ({safeYear}): NG = {energyFactors.ngMjPerM3} MJ/m³ | Diesel = {energyFactors.dieselMjPerLiter} MJ/L
+              NG: {energyFactors.ngMjPerM3} MJ/m³ ({energyFactors.ngKwhPerM3} kWh/m³) | Diesel: {energyFactors.dieselMjPerLiter} MJ/L
             </span>
             {isRatioSynced ? (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
@@ -679,6 +706,10 @@ export default function NaturalGasDieselVehiclesForm({
           <span>Include All Tk (BDT) Columns</span>
         </label>
         <label className="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" checked={sections.showEnergy} onChange={() => setSections(p => ({...p, showEnergy: !p.showEnergy}))} className="accent-violet-600 w-4 h-4" />
+          <span>Show Energy Conversion (MJ / kWh)</span>
+        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" checked={sections.remarks} onChange={() => setSections(p => ({...p, remarks: !p.remarks}))} className="accent-gray-600 w-4 h-4" />
           <span>Remarks</span>
         </label>
@@ -697,7 +728,7 @@ export default function NaturalGasDieselVehiclesForm({
               <th rowSpan={2} className="px-2 py-2 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 w-24 text-center">Month</th>
               
               {sections.ng && (
-                <th colSpan={ngMeters.length + 2 + (sections.includeTK ? 1 : 0)} className="px-2 py-2 bg-emerald-100 text-emerald-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
+                <th colSpan={ngMeters.length + 1 + (sections.showEnergy ? 1 : 0) + (sections.includeTK ? 1 : 0)} className="px-2 py-2 bg-emerald-100 text-emerald-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
                   Natural Gas (m³)
                 </th>
               )}
@@ -721,7 +752,7 @@ export default function NaturalGasDieselVehiclesForm({
               )}
 
               {sections.diesel && (
-                <th colSpan={4 + (sections.includeTK ? 1 : 0)} className="px-2 py-2 bg-emerald-100 text-emerald-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
+                <th colSpan={3 + (sections.showEnergy ? 1 : 0) + (sections.includeTK ? 1 : 0)} className="px-2 py-2 bg-emerald-100 text-emerald-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
                   (Boiler + Generator) Total Diesel (L)
                 </th>
               )}
@@ -771,7 +802,19 @@ export default function NaturalGasDieselVehiclesForm({
                     </th>
                   ))}
                   <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Total NG (m³)</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total NG (MJ)</th>
+                  {sections.showEnergy && (
+                    <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">
+                      <select
+                        value={ngEnergyUnit}
+                        onChange={(e) => setNgEnergyUnit(e.target.value as 'MJ' | 'kWh')}
+                        disabled={isViewer}
+                        className="text-xs font-semibold bg-transparent border-none outline-none cursor-pointer text-center"
+                      >
+                        <option value="MJ">Total NG (MJ)</option>
+                        <option value="kWh">Total NG (kWh)</option>
+                      </select>
+                    </th>
+                  )}
                   {sections.includeTK && (
                     <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Total Tk (BDT)</th>
                   )}
@@ -852,7 +895,9 @@ export default function NaturalGasDieselVehiclesForm({
               {sections.diesel && (
                 <>
                   <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Total Diesel (L)</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total Diesel (MJ)</th>
+                  {sections.showEnergy && (
+                    <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total Diesel (MJ)</th>
+                  )}
                   {sections.includeTK && (
                     <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Total Tk (BDT)</th>
                   )}
@@ -888,7 +933,9 @@ export default function NaturalGasDieselVehiclesForm({
                         </td>
                       ))}
                       <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30 border-l border-slate-200">{fmt(getTotalNG(row), 2)}</td>
-                      <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{fmt(getTotalNGMj(row), 2)}</td>
+                      {sections.showEnergy && (
+                        <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{fmt(getTotalNGEnergy(row), 2)}</td>
+                      )}
                       {sections.includeTK && (
                         <td className="px-1 py-1 border-l border-slate-200"><input type="text" inputMode="decimal" value={row.totalTkNG} onChange={(e) => updateMonthField(month, 'totalTkNG', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
                       )}
@@ -926,7 +973,9 @@ export default function NaturalGasDieselVehiclesForm({
                   {sections.diesel && (
                     <>
                       <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30 border-l border-slate-200">{fmt(getTotalDiesel(row), 2)}</td>
-                      <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{fmt(getTotalDieselMj(row), 2)}</td>
+                      {sections.showEnergy && (
+                        <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{fmt(getTotalDieselMj(row), 2)}</td>
+                      )}
                       {sections.includeTK && (
                         <td className="px-1 py-1 border-l border-slate-200"><input type="text" inputMode="decimal" value={row.totalTkDiesel} onChange={(e) => updateMonthField(month, 'totalTkDiesel', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
                       )}
@@ -973,7 +1022,9 @@ export default function NaturalGasDieselVehiclesForm({
                     return <td key={`tot-${m.id}`} className="px-2 py-2 text-right text-emerald-800">{fmt(sum, 2)}</td>;
                   })}
                   <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50 border-l border-slate-200">{fmt(getYearlySum((m, r) => getTotalNG(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getTotalNGMj(r)), 2)}</td>
+                  {sections.showEnergy && (
+                    <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getTotalNGEnergy(r)), 2)}</td>
+                  )}
                   {sections.includeTK && (
                     <td className="px-2 py-2 text-right text-emerald-800 border-l border-slate-200">{fmt(getYearlySum((m, r) => n(r.totalTkNG)), 2)}</td>
                   )}
@@ -1013,7 +1064,9 @@ export default function NaturalGasDieselVehiclesForm({
               {sections.diesel && (
                 <>
                   <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50 border-l border-slate-200">{fmt(getYearlySum((m, r) => getTotalDiesel(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getTotalDieselMj(r)), 2)}</td>
+                  {sections.showEnergy && (
+                    <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getTotalDieselMj(r)), 2)}</td>
+                  )}
                   {sections.includeTK && (
                     <td className="px-2 py-2 text-right text-emerald-800 border-l border-slate-200">{fmt(getYearlySum((m, r) => n(r.totalTkDiesel)), 2)}</td>
                   )}
