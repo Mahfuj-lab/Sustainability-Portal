@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Building2, Plus, Trash2, Save, CheckCircle2, 
-  MapPin, Factory, Phone, Mail, User, Calendar,
-  Layers, Settings, Check
+  Plus, Trash2, Save, CheckCircle2, 
+  Factory, Layers
 } from 'lucide-react';
 
 // ============================================================
@@ -18,7 +17,7 @@ interface FactoryProfileProps {
 }
 
 // ============================================================
-// TYPES
+// TYPES & DEFAULTS
 // ============================================================
 interface CustomField { id: string; label: string; value: string; }
 interface Contact { id: string; name: string; designation: string; phone: string; email: string; }
@@ -39,6 +38,17 @@ const DEFAULT_MACHINES = [
   "Juki Pump", "Deep Pump", "Water Pump", "Heat Press Machine", "Band Knife Machine"
 ];
 
+const getInitialFloors = (): Floor[] => [
+  { id: 'ground', name: 'Ground Floor', sections: [] },
+  { id: '1st', name: '1st Floor', sections: [] },
+  { id: '2nd', name: '2nd Floor', sections: [] },
+  { id: '3rd', name: '3rd Floor', sections: [] },
+  { id: 'roof', name: 'Rooftop', sections: [] },
+];
+
+const getInitialMachines = (): Machine[] => 
+  DEFAULT_MACHINES.map((name, i) => ({ id: `m_${i}_${Date.now()}`, name, qty: 0 }));
+
 // ============================================================
 // COMPONENT
 // ============================================================
@@ -46,19 +56,19 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
   activeSubModule, selectedUnit, unitFullName, userRole, restGet, restSet 
 }) => {
   const isViewer = userRole === 'viewer';
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start false to render UI immediately
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   
-  // Data State
+  // Data State initialized safely
   const [basicInfo, setBasicInfo] = useState<any>({});
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [premises, setPremises] = useState<any>({});
   const [workingHour, setWorkingHour] = useState<any>({});
-  const [floors, setFloors] = useState<Floor[]>([]);
-  const [machines, setMachines] = useState<Machine[]>([]);
+  const [floors, setFloors] = useState<Floor[]>(getInitialFloors);
+  const [machines, setMachines] = useState<Machine[]>(getInitialMachines);
   
-  // Custom Fields State (for basic_info, premises, working_hour)
+  // Custom Fields State
   const [customBasic, setCustomBasic] = useState<CustomField[]>([]);
   const [customPremises, setCustomPremises] = useState<CustomField[]>([]);
   const [customWorking, setCustomWorking] = useState<CustomField[]>([]);
@@ -66,58 +76,49 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
   // Process Checkboxes
   const processOptions = ["Knitting", "Dyeing", "Washing", "Cutting", "Sewing", "Finishing", "Printing", "Embroidery"];
 
-  // Load Data
+  // Load Data safely
   useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
       setLoading(true);
       try {
+        if (!selectedUnit || !activeSubModule) return;
+        
         const path = `units/${selectedUnit}/factory_profile/${activeSubModule}`;
         const data = await restGet(path);
         
-        if (data && isMounted) {
+        if (data && typeof data === 'object' && isMounted) {
           if (activeSubModule === 'fp_basic_info') {
-            setBasicInfo(data.basicInfo || {});
-            setContacts(data.contacts || []);
-            setCustomBasic(data.customFields || []);
+            setBasicInfo(data.basicInfo && typeof data.basicInfo === 'object' ? data.basicInfo : {});
+            setContacts(Array.isArray(data.contacts) ? data.contacts : []);
+            setCustomBasic(Array.isArray(data.customFields) ? data.customFields : []);
           } else if (activeSubModule === 'fp_premises') {
-            setPremises(data.premises || {});
-            setCustomPremises(data.customFields || []);
+            setPremises(data.premises && typeof data.premises === 'object' ? data.premises : {});
+            setCustomPremises(Array.isArray(data.customFields) ? data.customFields : []);
           } else if (activeSubModule === 'fp_working_hour') {
-            setWorkingHour(data.workingHour || {});
-            setCustomWorking(data.customFields || []);
+            setWorkingHour(data.workingHour && typeof data.workingHour === 'object' ? data.workingHour : {});
+            setCustomWorking(Array.isArray(data.customFields) ? data.customFields : []);
           } else if (activeSubModule === 'fp_floor_glance') {
-            setFloors(data.floors || [
-              { id: 'ground', name: 'Ground Floor', sections: [] },
-              { id: '1st', name: '1st Floor', sections: [] },
-              { id: '2nd', name: '2nd Floor', sections: [] },
-              { id: '3rd', name: '3rd Floor', sections: [] },
-              { id: 'roof', name: 'Rooftop', sections: [] },
-            ]);
+            setFloors(Array.isArray(data.floors) ? data.floors : getInitialFloors());
           } else if (activeSubModule === 'fp_machinery_list') {
-            if (data.machines && data.machines.length > 0) {
-              setMachines(data.machines);
-            } else {
-              setMachines(DEFAULT_MACHINES.map((name, i) => ({ id: `m_${i}`, name, qty: 0 })));
-            }
+            setMachines(Array.isArray(data.machines) && data.machines.length > 0 ? data.machines : getInitialMachines());
           }
         } else if (isMounted) {
-          // Initialize defaults
-          if (activeSubModule === 'fp_floor_glance') {
-            setFloors([
-              { id: 'ground', name: 'Ground Floor', sections: [] },
-              { id: '1st', name: '1st Floor', sections: [] },
-              { id: '2nd', name: '2nd Floor', sections: [] },
-              { id: '3rd', name: '3rd Floor', sections: [] },
-              { id: 'roof', name: 'Rooftop', sections: [] },
-            ]);
-          }
-          if (activeSubModule === 'fp_machinery_list') {
-            setMachines(DEFAULT_MACHINES.map((name, i) => ({ id: `m_${i}`, name, qty: 0 })));
+          // If no data (null/undefined), reset to safe defaults based on active sub-module
+          if (activeSubModule === 'fp_basic_info') {
+            setBasicInfo({}); setContacts([]); setCustomBasic([]);
+          } else if (activeSubModule === 'fp_premises') {
+            setPremises({}); setCustomPremises([]);
+          } else if (activeSubModule === 'fp_working_hour') {
+            setWorkingHour({}); setCustomWorking([]);
+          } else if (activeSubModule === 'fp_floor_glance') {
+            setFloors(getInitialFloors());
+          } else if (activeSubModule === 'fp_machinery_list') {
+            setMachines(getInitialMachines());
           }
         }
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching factory profile data:", err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -149,7 +150,8 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
       setToast('Saved successfully!');
       setTimeout(() => setToast(''), 3000);
     } catch (err: any) {
-      alert("Save failed: " + err.message);
+      console.error(err);
+      alert("Save failed: " + (err.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -202,8 +204,6 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
     fp_machinery_list: 'Machinery List'
   };
 
-  if (loading) return <div className="p-8 text-center text-sm font-medium text-emerald-600 animate-pulse">Loading Profile Data...</div>;
-
   return (
     <div className="space-y-6">
       {/* HEADER BANNER */}
@@ -212,13 +212,17 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
           <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 mb-1 uppercase tracking-wide">
             <Factory size={14} /> Factory Profile
           </div>
-          <h2 className="text-xl font-bold text-gray-800">{subModuleTitles[activeSubModule]}</h2>
-          <p className="text-sm text-gray-500 font-medium mt-1">{unitFullName} ({selectedUnit})</p>
+          <h2 className="text-xl font-bold text-gray-800">
+            {subModuleTitles[activeSubModule] || 'Profile'}
+          </h2>
+          <p className="text-sm text-gray-500 font-medium mt-1">
+            {unitFullName} ({selectedUnit})
+          </p>
         </div>
         {!isViewer && (
           <button 
             onClick={handleSave} 
-            disabled={saving}
+            disabled={saving || loading}
             className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors"
           >
             <Save size={16} /> {saving ? 'Saving...' : 'Save Data'}
@@ -233,16 +237,22 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
       )}
 
       {/* CONTENT AREA */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-8">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-8 relative">
         
+        {loading && (
+          <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-xl">
+            <div className="animate-pulse text-emerald-600 text-sm font-medium">Syncing with Firestore...</div>
+          </div>
+        )}
+
         {/* ================= BASIC INFO ================= */}
         {activeSubModule === 'fp_basic_info' && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Name of the Facility (As per license)</label><input disabled={isViewer} value={basicInfo.name || ''} onChange={e => handleBasicChange('name', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 outline-none focus:border-emerald-500" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Facility Address</label><input disabled={isViewer} value={basicInfo.address || ''} onChange={e => handleBasicChange('address', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 outline-none focus:border-emerald-500" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Zip Code</label><input disabled={isViewer} value={basicInfo.zip || ''} onChange={e => handleBasicChange('zip', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 outline-none focus:border-emerald-500" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Name of the Owner</label><input disabled={isViewer} value={basicInfo.owner || ''} onChange={e => handleBasicChange('owner', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 outline-none focus:border-emerald-500" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Name of the Facility (As per license)</label><input disabled={isViewer} value={basicInfo?.name || ''} onChange={e => handleBasicChange('name', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 outline-none focus:border-emerald-500" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Facility Address</label><input disabled={isViewer} value={basicInfo?.address || ''} onChange={e => handleBasicChange('address', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 outline-none focus:border-emerald-500" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Zip Code</label><input disabled={isViewer} value={basicInfo?.zip || ''} onChange={e => handleBasicChange('zip', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 outline-none focus:border-emerald-500" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Name of the Owner</label><input disabled={isViewer} value={basicInfo?.owner || ''} onChange={e => handleBasicChange('owner', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 outline-none focus:border-emerald-500" /></div>
             </div>
 
             {/* Contact Persons */}
@@ -252,12 +262,12 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
                 {!isViewer && <button onClick={addContact} className="ml-4 flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-700"><Plus size={14} /> Add Contact Person</button>}
               </div>
               <div className="space-y-3">
-                {contacts.map((c, i) => (
+                {contacts.map((c) => (
                   <div key={c.id} className="flex flex-col md:flex-row gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                    <input disabled={isViewer} placeholder="Name" value={c.name} onChange={e => updateContact(c.id, 'name', e.target.value)} className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm disabled:bg-gray-100" />
-                    <input disabled={isViewer} placeholder="Designation" value={c.designation} onChange={e => updateContact(c.id, 'designation', e.target.value)} className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm disabled:bg-gray-100" />
-                    <input disabled={isViewer} placeholder="Tel/Cell" value={c.phone} onChange={e => updateContact(c.id, 'phone', e.target.value)} className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm disabled:bg-gray-100" />
-                    <input disabled={isViewer} placeholder="E-mail" value={c.email} onChange={e => updateContact(c.id, 'email', e.target.value)} className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm disabled:bg-gray-100" />
+                    <input disabled={isViewer} placeholder="Name" value={c.name || ''} onChange={e => updateContact(c.id, 'name', e.target.value)} className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm disabled:bg-gray-100" />
+                    <input disabled={isViewer} placeholder="Designation" value={c.designation || ''} onChange={e => updateContact(c.id, 'designation', e.target.value)} className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm disabled:bg-gray-100" />
+                    <input disabled={isViewer} placeholder="Tel/Cell" value={c.phone || ''} onChange={e => updateContact(c.id, 'phone', e.target.value)} className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm disabled:bg-gray-100" />
+                    <input disabled={isViewer} placeholder="E-mail" value={c.email || ''} onChange={e => updateContact(c.id, 'email', e.target.value)} className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm disabled:bg-gray-100" />
                     {!isViewer && <button onClick={() => removeContact(c.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={16} /></button>}
                   </div>
                 ))}
@@ -270,8 +280,8 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {processOptions.map(p => (
                   <label key={p} className="flex items-center gap-2 text-sm text-gray-700">
-                    <input type="checkbox" disabled={isViewer} checked={(basicInfo.processes || []).includes(p)} onChange={e => {
-                      const current = basicInfo.processes || [];
+                    <input type="checkbox" disabled={isViewer} checked={(basicInfo?.processes || []).includes(p)} onChange={e => {
+                      const current = basicInfo?.processes || [];
                       handleBasicChange('processes', e.target.checked ? [...current, p] : current.filter((x: string) => x !== p));
                     }} className="rounded text-emerald-600 focus:ring-emerald-500" />
                     {p}
@@ -282,28 +292,28 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
 
             {/* Standard Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Years in Operation (Establishment Year)</label><input disabled={isViewer} value={basicInfo.yearsOperation || ''} onChange={e => handleBasicChange('yearsOperation', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Number of Line/Table</label><input disabled={isViewer} value={basicInfo.lines || ''} onChange={e => handleBasicChange('lines', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Name of major buyer</label><input disabled={isViewer} value={basicInfo.buyer || ''} onChange={e => handleBasicChange('buyer', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Monthly Production Capacity</label><input disabled={isViewer} value={basicInfo.capacity || ''} onChange={e => handleBasicChange('capacity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Years in Operation (Establishment Year)</label><input disabled={isViewer} value={basicInfo?.yearsOperation || ''} onChange={e => handleBasicChange('yearsOperation', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Number of Line/Table</label><input disabled={isViewer} value={basicInfo?.lines || ''} onChange={e => handleBasicChange('lines', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Name of major buyer</label><input disabled={isViewer} value={basicInfo?.buyer || ''} onChange={e => handleBasicChange('buyer', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Monthly Production Capacity</label><input disabled={isViewer} value={basicInfo?.capacity || ''} onChange={e => handleBasicChange('capacity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
               
               <div className="col-span-full border-t pt-4"><h4 className="text-xs font-bold text-gray-800 mb-4 uppercase">Health & Safety Facilities</h4></div>
               
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Full Time Doctor</label><select disabled={isViewer} value={basicInfo.doctor || ''} onChange={e => handleBasicChange('doctor', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Doctor Details</label><input disabled={isViewer} value={basicInfo.doctorDetails || ''} onChange={e => handleBasicChange('doctorDetails', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Full Time Nurse</label><select disabled={isViewer} value={basicInfo.nurse || ''} onChange={e => handleBasicChange('nurse', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Nurse Details</label><input disabled={isViewer} value={basicInfo.nurseDetails || ''} onChange={e => handleBasicChange('nurseDetails', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Child Care with Wash Facility</label><select disabled={isViewer} value={basicInfo.childCare || ''} onChange={e => handleBasicChange('childCare', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Child Care Capacity</label><input disabled={isViewer} value={basicInfo.childCareCapacity || ''} onChange={e => handleBasicChange('childCareCapacity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Dining Area</label><select disabled={isViewer} value={basicInfo.dining || ''} onChange={e => handleBasicChange('dining', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Dining Seating Capacity</label><input disabled={isViewer} value={basicInfo.diningCapacity || ''} onChange={e => handleBasicChange('diningCapacity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">First Aid Box Quantity</label><input disabled={isViewer} value={basicInfo.firstAid || ''} onChange={e => handleBasicChange('firstAid', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total First Aider</label><input disabled={isViewer} value={basicInfo.firstAider || ''} onChange={e => handleBasicChange('firstAider', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Drinking Water Facility</label><select disabled={isViewer} value={basicInfo.drinkingWater || ''} onChange={e => handleBasicChange('drinkingWater', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Water Capacity/Method</label><input disabled={isViewer} value={basicInfo.waterCapacity || ''} onChange={e => handleBasicChange('waterCapacity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Number of Complain Box</label><input disabled={isViewer} value={basicInfo.complainBox || ''} onChange={e => handleBasicChange('complainBox', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Contract workers</label><select disabled={isViewer} value={basicInfo.contractWorkers || ''} onChange={e => handleBasicChange('contractWorkers', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">How Many Contract Workers</label><input disabled={isViewer} value={basicInfo.contractCount || ''} onChange={e => handleBasicChange('contractCount', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Full Time Doctor</label><select disabled={isViewer} value={basicInfo?.doctor || ''} onChange={e => handleBasicChange('doctor', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Doctor Details</label><input disabled={isViewer} value={basicInfo?.doctorDetails || ''} onChange={e => handleBasicChange('doctorDetails', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Full Time Nurse</label><select disabled={isViewer} value={basicInfo?.nurse || ''} onChange={e => handleBasicChange('nurse', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Nurse Details</label><input disabled={isViewer} value={basicInfo?.nurseDetails || ''} onChange={e => handleBasicChange('nurseDetails', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Child Care with Wash Facility</label><select disabled={isViewer} value={basicInfo?.childCare || ''} onChange={e => handleBasicChange('childCare', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Child Care Capacity</label><input disabled={isViewer} value={basicInfo?.childCareCapacity || ''} onChange={e => handleBasicChange('childCareCapacity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Dining Area</label><select disabled={isViewer} value={basicInfo?.dining || ''} onChange={e => handleBasicChange('dining', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Dining Seating Capacity</label><input disabled={isViewer} value={basicInfo?.diningCapacity || ''} onChange={e => handleBasicChange('diningCapacity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">First Aid Box Quantity</label><input disabled={isViewer} value={basicInfo?.firstAid || ''} onChange={e => handleBasicChange('firstAid', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total First Aider</label><input disabled={isViewer} value={basicInfo?.firstAider || ''} onChange={e => handleBasicChange('firstAider', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Drinking Water Facility</label><select disabled={isViewer} value={basicInfo?.drinkingWater || ''} onChange={e => handleBasicChange('drinkingWater', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Water Capacity/Method</label><input disabled={isViewer} value={basicInfo?.waterCapacity || ''} onChange={e => handleBasicChange('waterCapacity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Number of Complain Box</label><input disabled={isViewer} value={basicInfo?.complainBox || ''} onChange={e => handleBasicChange('complainBox', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Contract workers</label><select disabled={isViewer} value={basicInfo?.contractWorkers || ''} onChange={e => handleBasicChange('contractWorkers', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">How Many Contract Workers</label><input disabled={isViewer} value={basicInfo?.contractCount || ''} onChange={e => handleBasicChange('contractCount', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
             </div>
 
             {/* Custom Fields */}
@@ -315,8 +325,8 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
               <div className="space-y-3">
                 {customBasic.map(f => (
                   <div key={f.id} className="flex gap-3">
-                    <input disabled={isViewer} placeholder="Field Label" value={f.label} onChange={e => updateCustomField(setCustomBasic, f.id, 'label', e.target.value)} className="w-1/3 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 font-medium text-gray-700" />
-                    <input disabled={isViewer} placeholder="Value" value={f.value} onChange={e => updateCustomField(setCustomBasic, f.id, 'value', e.target.value)} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" />
+                    <input disabled={isViewer} placeholder="Field Label" value={f.label || ''} onChange={e => updateCustomField(setCustomBasic, f.id, 'label', e.target.value)} className="w-1/3 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 font-medium text-gray-700" />
+                    <input disabled={isViewer} placeholder="Value" value={f.value || ''} onChange={e => updateCustomField(setCustomBasic, f.id, 'value', e.target.value)} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" />
                     {!isViewer && <button onClick={() => removeCustomField(setCustomBasic, f.id)} className="text-red-500 hover:text-red-700 p-2"><Trash2 size={16} /></button>}
                   </div>
                 ))}
@@ -329,33 +339,33 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
         {activeSubModule === 'fp_premises' && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Land Area</label><input disabled={isViewer} value={premises.landArea || ''} onChange={e => handlePremisesChange('landArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Numbers of Buildings</label><input disabled={isViewer} value={premises.buildings || ''} onChange={e => handlePremisesChange('buildings', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Numbers of Floors</label><input disabled={isViewer} value={premises.floors || ''} onChange={e => handlePremisesChange('floors', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Centralized Fire Detection (Y/N)</label><select disabled={isViewer} value={premises.fireDetect || ''} onChange={e => handlePremisesChange('fireDetect', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Fire Hydrant System (Y/N)</label><select disabled={isViewer} value={premises.hydrant || ''} onChange={e => handlePremisesChange('hydrant', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Water Reserve Tank (Y/N)</label><select disabled={isViewer} value={premises.reserveTank || ''} onChange={e => handlePremisesChange('reserveTank', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Water Reserve Tank Capacity</label><input disabled={isViewer} value={premises.reserveTankCapacity || ''} onChange={e => handlePremisesChange('reserveTankCapacity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Fire Door Status (Y/N)</label><select disabled={isViewer} value={premises.fireDoor || ''} onChange={e => handlePremisesChange('fireDoor', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Number of Exits (Each Floor)</label><input disabled={isViewer} value={premises.exits || ''} onChange={e => handlePremisesChange('exits', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total ETP Area</label><input disabled={isViewer} value={premises.etpArea || ''} onChange={e => handlePremisesChange('etpArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total ETP Capacity</label><input disabled={isViewer} value={premises.etpCapacity || ''} onChange={e => handlePremisesChange('etpCapacity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Eye wash station for print/spot room (Y/N)</label><select disabled={isViewer} value={premises.eyeWash || ''} onChange={e => handlePremisesChange('eyeWash', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Land Area</label><input disabled={isViewer} value={premises?.landArea || ''} onChange={e => handlePremisesChange('landArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Numbers of Buildings</label><input disabled={isViewer} value={premises?.buildings || ''} onChange={e => handlePremisesChange('buildings', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Numbers of Floors</label><input disabled={isViewer} value={premises?.floors || ''} onChange={e => handlePremisesChange('floors', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Centralized Fire Detection (Y/N)</label><select disabled={isViewer} value={premises?.fireDetect || ''} onChange={e => handlePremisesChange('fireDetect', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Fire Hydrant System (Y/N)</label><select disabled={isViewer} value={premises?.hydrant || ''} onChange={e => handlePremisesChange('hydrant', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Water Reserve Tank (Y/N)</label><select disabled={isViewer} value={premises?.reserveTank || ''} onChange={e => handlePremisesChange('reserveTank', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Water Reserve Tank Capacity</label><input disabled={isViewer} value={premises?.reserveTankCapacity || ''} onChange={e => handlePremisesChange('reserveTankCapacity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Fire Door Status (Y/N)</label><select disabled={isViewer} value={premises?.fireDoor || ''} onChange={e => handlePremisesChange('fireDoor', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Number of Exits (Each Floor)</label><input disabled={isViewer} value={premises?.exits || ''} onChange={e => handlePremisesChange('exits', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total ETP Area</label><input disabled={isViewer} value={premises?.etpArea || ''} onChange={e => handlePremisesChange('etpArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total ETP Capacity</label><input disabled={isViewer} value={premises?.etpCapacity || ''} onChange={e => handlePremisesChange('etpCapacity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Eye wash station for print/spot room (Y/N)</label><select disabled={isViewer} value={premises?.eyeWash || ''} onChange={e => handlePremisesChange('eyeWash', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50"><option value="">Select...</option><option value="Yes">Yes</option><option value="No">No</option></select></div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Production Area (SFT)</label><input disabled={isViewer} value={premises.prodArea || ''} onChange={e => handlePremisesChange('prodArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Cutting Area (SFT)</label><input disabled={isViewer} value={premises.cutArea || ''} onChange={e => handlePremisesChange('cutArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Sewing Area (SFT)</label><input disabled={isViewer} value={premises.sewArea || ''} onChange={e => handlePremisesChange('sewArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Finishing Area (SFT)</label><input disabled={isViewer} value={premises.finishArea || ''} onChange={e => handlePremisesChange('finishArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Warehouse Area (SFT)</label><input disabled={isViewer} value={premises.warehouseArea || ''} onChange={e => handlePremisesChange('warehouseArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Fabrics Warehouse Area (SFT)</label><input disabled={isViewer} value={premises.fabricsWHArea || ''} onChange={e => handlePremisesChange('fabricsWHArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Finished Goods Warehouse Area (SFT)</label><input disabled={isViewer} value={premises.finishedWHArea || ''} onChange={e => handlePremisesChange('finishedWHArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Accessories Warehouse Area (SFT)</label><input disabled={isViewer} value={premises.accWHArea || ''} onChange={e => handlePremisesChange('accWHArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Dining Area (SFT)</label><input disabled={isViewer} value={premises.diningArea || ''} onChange={e => handlePremisesChange('diningArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Utility Area (SFT)</label><input disabled={isViewer} value={premises.utilityArea || ''} onChange={e => handlePremisesChange('utilityArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Other Areas (SFT)</label><input disabled={isViewer} value={premises.otherArea || ''} onChange={e => handlePremisesChange('otherArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Factory Area (SFT & SQM)</label><input disabled={isViewer} value={premises.totalFactoryArea || ''} onChange={e => handlePremisesChange('totalFactoryArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Production Area (SFT)</label><input disabled={isViewer} value={premises?.prodArea || ''} onChange={e => handlePremisesChange('prodArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Cutting Area (SFT)</label><input disabled={isViewer} value={premises?.cutArea || ''} onChange={e => handlePremisesChange('cutArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Sewing Area (SFT)</label><input disabled={isViewer} value={premises?.sewArea || ''} onChange={e => handlePremisesChange('sewArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Finishing Area (SFT)</label><input disabled={isViewer} value={premises?.finishArea || ''} onChange={e => handlePremisesChange('finishArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Warehouse Area (SFT)</label><input disabled={isViewer} value={premises?.warehouseArea || ''} onChange={e => handlePremisesChange('warehouseArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Fabrics Warehouse Area (SFT)</label><input disabled={isViewer} value={premises?.fabricsWHArea || ''} onChange={e => handlePremisesChange('fabricsWHArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Finished Goods Warehouse Area (SFT)</label><input disabled={isViewer} value={premises?.finishedWHArea || ''} onChange={e => handlePremisesChange('finishedWHArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Accessories Warehouse Area (SFT)</label><input disabled={isViewer} value={premises?.accWHArea || ''} onChange={e => handlePremisesChange('accWHArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Dining Area (SFT)</label><input disabled={isViewer} value={premises?.diningArea || ''} onChange={e => handlePremisesChange('diningArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Utility Area (SFT)</label><input disabled={isViewer} value={premises?.utilityArea || ''} onChange={e => handlePremisesChange('utilityArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Other Areas (SFT)</label><input disabled={isViewer} value={premises?.otherArea || ''} onChange={e => handlePremisesChange('otherArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Total Factory Area (SFT & SQM)</label><input disabled={isViewer} value={premises?.totalFactoryArea || ''} onChange={e => handlePremisesChange('totalFactoryArea', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
             </div>
 
             {/* Custom Fields */}
@@ -367,8 +377,8 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
               <div className="space-y-3">
                 {customPremises.map(f => (
                   <div key={f.id} className="flex gap-3">
-                    <input disabled={isViewer} placeholder="Area Name" value={f.label} onChange={e => updateCustomField(setCustomPremises, f.id, 'label', e.target.value)} className="w-1/3 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 font-medium text-gray-700" />
-                    <input disabled={isViewer} placeholder="Value" value={f.value} onChange={e => updateCustomField(setCustomPremises, f.id, 'value', e.target.value)} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" />
+                    <input disabled={isViewer} placeholder="Area Name" value={f.label || ''} onChange={e => updateCustomField(setCustomPremises, f.id, 'label', e.target.value)} className="w-1/3 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 font-medium text-gray-700" />
+                    <input disabled={isViewer} placeholder="Value" value={f.value || ''} onChange={e => updateCustomField(setCustomPremises, f.id, 'value', e.target.value)} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" />
                     {!isViewer && <button onClick={() => removeCustomField(setCustomPremises, f.id)} className="text-red-500 hover:text-red-700 p-2"><Trash2 size={16} /></button>}
                   </div>
                 ))}
@@ -381,13 +391,13 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
         {activeSubModule === 'fp_working_hour' && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Working Days per Week</label><input disabled={isViewer} value={workingHour.daysWeek || ''} onChange={e => handleWorkingChange('daysWeek', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Working Hour Per Day</label><input disabled={isViewer} value={workingHour.hoursDay || ''} onChange={e => handleWorkingChange('hoursDay', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Overtime Hours</label><input disabled={isViewer} value={workingHour.overtime || ''} onChange={e => handleWorkingChange('overtime', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Break/Lunch Hour</label><input disabled={isViewer} value={workingHour.breakHour || ''} onChange={e => handleWorkingChange('breakHour', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Wage/Payment System</label><input disabled={isViewer} value={workingHour.wageSystem || ''} onChange={e => handleWorkingChange('wageSystem', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Monthly Salary Date</label><input disabled={isViewer} value={workingHour.salaryDate || ''} onChange={e => handleWorkingChange('salaryDate', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
-              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Overtime Payment Date</label><input disabled={isViewer} value={workingHour.overtimeDate || ''} onChange={e => handleWorkingChange('overtimeDate', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Working Days per Week</label><input disabled={isViewer} value={workingHour?.daysWeek || ''} onChange={e => handleWorkingChange('daysWeek', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Working Hour Per Day</label><input disabled={isViewer} value={workingHour?.hoursDay || ''} onChange={e => handleWorkingChange('hoursDay', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Overtime Hours</label><input disabled={isViewer} value={workingHour?.overtime || ''} onChange={e => handleWorkingChange('overtime', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Break/Lunch Hour</label><input disabled={isViewer} value={workingHour?.breakHour || ''} onChange={e => handleWorkingChange('breakHour', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Wage/Payment System</label><input disabled={isViewer} value={workingHour?.wageSystem || ''} onChange={e => handleWorkingChange('wageSystem', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Monthly Salary Date</label><input disabled={isViewer} value={workingHour?.salaryDate || ''} onChange={e => handleWorkingChange('salaryDate', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
+              <div><label className="block text-xs font-semibold text-gray-600 mb-1.5">Overtime Payment Date</label><input disabled={isViewer} value={workingHour?.overtimeDate || ''} onChange={e => handleWorkingChange('overtimeDate', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" /></div>
             </div>
 
             {/* Custom Fields */}
@@ -399,8 +409,8 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
               <div className="space-y-3">
                 {customWorking.map(f => (
                   <div key={f.id} className="flex gap-3">
-                    <input disabled={isViewer} placeholder="Field Label" value={f.label} onChange={e => updateCustomField(setCustomWorking, f.id, 'label', e.target.value)} className="w-1/3 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 font-medium text-gray-700" />
-                    <input disabled={isViewer} placeholder="Value" value={f.value} onChange={e => updateCustomField(setCustomWorking, f.id, 'value', e.target.value)} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" />
+                    <input disabled={isViewer} placeholder="Field Label" value={f.label || ''} onChange={e => updateCustomField(setCustomWorking, f.id, 'label', e.target.value)} className="w-1/3 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50 font-medium text-gray-700" />
+                    <input disabled={isViewer} placeholder="Value" value={f.value || ''} onChange={e => updateCustomField(setCustomWorking, f.id, 'value', e.target.value)} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-50" />
                     {!isViewer && <button onClick={() => removeCustomField(setCustomWorking, f.id)} className="text-red-500 hover:text-red-700 p-2"><Trash2 size={16} /></button>}
                   </div>
                 ))}
@@ -416,14 +426,14 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
               {floors.map(floor => (
                 <div key={floor.id} className="border border-gray-200 rounded-xl bg-gray-50/50 p-4">
                   <div className="flex items-center justify-between mb-3 border-b border-gray-200 pb-2">
-                    <input disabled={isViewer} value={floor.name} onChange={e => updateFloorName(floor.id, e.target.value)} className="font-bold text-gray-800 bg-transparent outline-none focus:border-b border-emerald-500" />
+                    <input disabled={isViewer} value={floor.name || ''} onChange={e => updateFloorName(floor.id, e.target.value)} className="font-bold text-gray-800 bg-transparent outline-none focus:border-b border-emerald-500" />
                     {!isViewer && <button onClick={() => removeFloor(floor.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button>}
                   </div>
                   <div className="space-y-2">
                     {floor.sections.map(sec => (
                       <div key={sec.id} className="flex gap-2 items-center">
                         <Layers size={14} className="text-gray-400" />
-                        <input disabled={isViewer} value={sec.name} onChange={e => updateFloorSection(floor.id, sec.id, e.target.value)} placeholder="Section / Department Name" className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-xs disabled:bg-gray-100" />
+                        <input disabled={isViewer} value={sec.name || ''} onChange={e => updateFloorSection(floor.id, sec.id, e.target.value)} placeholder="Section / Department Name" className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-xs disabled:bg-gray-100" />
                         {!isViewer && <button onClick={() => removeFloorSection(floor.id, sec.id)} className="text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>}
                       </div>
                     ))}
@@ -462,7 +472,7 @@ const FactoryProfile: React.FC<FactoryProfileProps> = ({
                     <tr key={m.id} className="hover:bg-gray-50">
                       <td className="px-4 py-2 text-gray-500 font-medium">{i + 1}</td>
                       <td className="px-4 py-2">
-                        <input disabled={isViewer} value={m.name} onChange={e => updateMachine(m.id, 'name', e.target.value)} className="w-full px-2 py-1 border border-transparent hover:border-gray-300 focus:border-emerald-500 rounded bg-transparent outline-none disabled:bg-transparent" />
+                        <input disabled={isViewer} value={m.name || ''} onChange={e => updateMachine(m.id, 'name', e.target.value)} className="w-full px-2 py-1 border border-transparent hover:border-gray-300 focus:border-emerald-500 rounded bg-transparent outline-none disabled:bg-transparent" />
                       </td>
                       <td className="px-4 py-2">
                         <input disabled={isViewer} type="number" min="0" value={m.qty || 0} onChange={e => updateMachine(m.id, 'qty', parseInt(e.target.value) || 0)} className="w-full px-2 py-1 border border-gray-300 rounded disabled:bg-gray-50 text-right" />
