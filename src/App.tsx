@@ -968,7 +968,6 @@ const App: React.FC = () => {
                     </tbody>
                                       </table>
                 </div>
-              </div>
             )}
 
                            {activeModule.startsWith('kpi_') && (
