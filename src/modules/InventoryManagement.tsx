@@ -48,6 +48,36 @@ const SUB_MODULES_MAP: Record<string, { title: string; icon: React.ElementType; 
     icon: Factory,
     description: 'Track hazardous, non-hazardous, and recyclable solid waste generation and disposal records.'
   },
+  'inv_water_withdrawal': {
+    title: 'Water Withdrawal',
+    icon: Factory,
+    description: 'Track groundwater, surface water, rainwater harvesting, and municipal water withdrawal records.'
+  },
+  'inv_wastewater_etp': {
+    title: 'Wastewater & ETP',
+    icon: Factory,
+    description: 'Monitor ETP inlet/outlet flow, discharge quality parameters, and wastewater recycling metrics.'
+  },
+  'inv_air_emission': {
+    title: 'Air Emission & Stack Monitoring',
+    icon: Flame,
+    description: 'Track boiler & generator stack emissions, ambient air quality, and flue gas monitoring results.'
+  },
+  'inv_refrigerant_ods': {
+    title: 'Refrigerant & ODS',
+    icon: Factory,
+    description: 'Manage chiller, AC refrigerant top-ups, leakage logs, and Ozone Depleting Substances (ODS) inventory.'
+  },
+  'inv_chemical_zdhc': {
+    title: 'Chemical Inventory & ZDHC',
+    icon: Factory,
+    description: 'Track chemical consumption, ZDHC MRSL conformance, and InCheck performance records.'
+  },
+  'inv_commuting_logistics': {
+    title: 'Employee Commuting & Logistics',
+    icon: Factory,
+    description: 'Monitor employee transport, company vehicles, and upstream/downstream logistics data.'
+  },
 
   'inv_ghg_emission': { 
     title: 'GHG Emission', 
