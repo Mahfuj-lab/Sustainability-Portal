@@ -927,7 +927,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {activeModule === 'user_management' && isSuper && (
+                   {activeModule === 'user_management' && isSuper && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <h2 className="text-sm font-bold text-gray-800">User Management</h2>
@@ -935,7 +935,9 @@ const App: React.FC = () => {
                   <Plus size={14} /> Add User
                 </button>
               </div>
-              {userLoading ? <div className="p-4 text-xs text-emerald-600">Loading users...</div> : (
+              {userLoading ? (
+                <div className="p-4 text-xs text-emerald-600">Loading users...</div>
+              ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
@@ -958,17 +960,19 @@ const App: React.FC = () => {
                               {u.role}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-[10px] text-gray-500">{(u.allowed_modules||[]).length} modules</td>
-                          <td className="px-3 py-2 text-[10px] text-gray-500">{(u.allowed_factories||[]).length} units</td>
+                          <td className="px-3 py-2 text-[10px] text-gray-500">{(u.allowed_modules || []).length} modules</td>
+                          <td className="px-3 py-2 text-[10px] text-gray-500">{(u.allowed_factories || []).length} units</td>
                           <td className="px-3 py-2 text-right">
                             <button onClick={() => setEditingUser(u)} className="text-emerald-600 hover:underline text-[11px]">Edit</button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
-                                      </table>
+                  </table>
                 </div>
-            )}
+              )}
+            </div>
+          )}
 
                            {activeModule.startsWith('kpi_') && (
             <KpiManagement
