@@ -1,4 +1,5 @@
 import React from 'react';
+import WaterWithdrawalForm from './WaterWithdrawalForm';
 import BoilerGeneratorCompressorForm from './BoilerGeneratorCompressorForm';
 import NaturalGasDieselVehiclesForm from './NaturalGasDieselVehiclesForm';
 import PurchaseElectricitySolarForm from './PurchaseElectricitySolarForm';
@@ -149,6 +150,9 @@ if (activeSubModule === 'inv_electricity_solar') {
   }
   if (activeSubModule === 'inv_steam_boiler') {
     return <BoilerGeneratorCompressorForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
+  }
+  if (activeSubModule === 'inv_water_withdrawal') {
+    return <WaterWithdrawalForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
   }
 
   return (
