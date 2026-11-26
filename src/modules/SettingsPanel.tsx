@@ -1,245 +1,248 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Palette, Save, Factory } from 'lucide-react';
+import { Palette, Flame, Lock, Bell, Save, Plus, Trash2, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { UNIT_DIRECTORY } from '../utils/unitDirectory';
 
-// ============================================================
-// THEME CONFIGURATIONS
-// ============================================================
-export const THEMES = [
+export type ThemeKey = 'emerald' | 'navy' | 'midnight' | 'teal' | 'slate';
+
+export interface ThemeConfig {
+  id: ThemeKey;
+  name: string;
+  description: string;
+  sidebarBg: string;
+  sidebarText: string;
+  headerBg: string;
+  mainBg: string;
+  cardBg: string;
+  accentBg: string;
+  accentText: string;
+  previewPrimary: string;
+  previewSecondary: string;
+}
+
+export const THEMES: ThemeConfig[] = [
   {
     id: 'emerald',
-    name: 'Emerald Sustainability',
-    description: 'Vibrant emerald primary, crisp white cards, soft emerald accents.',
-    previewColors: ['#ffffff', '#ecfdf5', '#10b981', '#047857', '#064e3b'],
-    sidebarBg: 'bg-white',
-    sidebarText: 'text-gray-600',
-    sidebarActive: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    headerBg: 'bg-white border-gray-200',
-    primaryBtn: 'bg-emerald-600 hover:bg-emerald-700 text-white',
-    accentBadge: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-    pageBg: 'bg-gray-50',
+    name: 'Emerald Eco',
+    description: 'Clean sustainability-focused green & crisp white interface',
+    sidebarBg: 'bg-emerald-950',
+    sidebarText: 'text-emerald-100',
+    headerBg: 'bg-white border-b border-slate-200 text-slate-800',
+    mainBg: 'bg-slate-50',
+    cardBg: 'bg-white border border-slate-200 text-slate-800',
+    accentBg: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+    accentText: 'text-emerald-600',
+    previewPrimary: '#064e3b',
+    previewSecondary: '#10b981',
   },
   {
-    id: 'ocean',
-    name: 'Royal Ocean Blue',
-    description: 'Deep sky/blue primary, crisp slate-50 background, high-contrast blue.',
-    previewColors: ['#f8fafc', '#f0f9ff', '#0ea5e9', '#2563eb', '#1e3a8a'],
-    sidebarBg: 'bg-white',
-    sidebarText: 'text-slate-600',
-    sidebarActive: 'bg-blue-50 text-blue-700 border-blue-200',
-    headerBg: 'bg-white border-slate-200',
-    primaryBtn: 'bg-blue-600 hover:bg-blue-700 text-white',
-    accentBadge: 'bg-blue-50 text-blue-700 border-blue-100',
-    pageBg: 'bg-slate-50',
-  },
-  {
-    id: 'aurora',
-    name: 'Vibrant Aurora (Colorful)',
-    description: 'Rich indigo-to-purple-to-teal gradients, colorful status badges, modern SaaS look.',
-    previewColors: ['#fdf4ff', '#e0e7ff', '#818cf8', '#c084fc', '#0d9488'],
-    sidebarBg: 'bg-white',
-    sidebarText: 'text-indigo-900/60',
-    sidebarActive: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    headerBg: 'bg-white border-indigo-100',
-    primaryBtn: 'bg-gradient-to-r from-indigo-500 via-purple-500 to-teal-400 hover:opacity-90 text-white',
-    accentBadge: 'bg-purple-50 text-purple-700 border-purple-100',
-    pageBg: 'bg-[#fdf4ff]', // Very soft purple/white
-  },
-  {
-    id: 'sunset',
-    name: 'Warm Coral & Amber',
-    description: 'Vibrant orange/amber & rose accents, crisp warm-white surface.',
-    previewColors: ['#fffbeb', '#fef3c7', '#f59e0b', '#f43f5e', '#881337'],
-    sidebarBg: 'bg-white',
-    sidebarText: 'text-amber-900/60',
-    sidebarActive: 'bg-amber-50 text-amber-700 border-amber-200',
-    headerBg: 'bg-white border-amber-100',
-    primaryBtn: 'bg-amber-600 hover:bg-amber-700 text-white',
-    accentBadge: 'bg-rose-50 text-rose-700 border-rose-100',
-    pageBg: 'bg-orange-50/30',
+    id: 'navy',
+    name: 'Corporate Navy',
+    description: 'Executive boardroom navy blue & slate corporate look',
+    sidebarBg: 'bg-slate-900',
+    sidebarText: 'text-slate-200',
+    headerBg: 'bg-white border-b border-slate-200 text-slate-800',
+    mainBg: 'bg-slate-100',
+    cardBg: 'bg-white border border-slate-200 text-slate-800',
+    accentBg: 'bg-blue-700 hover:bg-blue-800 text-white',
+    accentText: 'text-blue-700',
+    previewPrimary: '#0f172a',
+    previewSecondary: '#1d4ed8',
   },
   {
     id: 'midnight',
     name: 'Midnight Pro (Dark)',
-    description: 'High-contrast slate-900 dark mode with glowing emerald/cyan accents.',
-    previewColors: ['#0f172a', '#1e293b', '#334155', '#10b981', '#06b6d4'],
-    sidebarBg: 'bg-slate-900',
-    sidebarText: 'text-slate-400',
-    sidebarActive: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    headerBg: 'bg-slate-900 border-slate-800',
-    primaryBtn: 'bg-emerald-500 hover:bg-emerald-400 text-slate-900',
-    accentBadge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    pageBg: 'bg-slate-950',
+    description: 'Low-glare dark workspace designed for long analytical sessions',
+    sidebarBg: 'bg-zinc-950 border-r border-zinc-800',
+    sidebarText: 'text-zinc-200',
+    headerBg: 'bg-zinc-900 border-b border-zinc-800 text-zinc-100',
+    mainBg: 'bg-zinc-950',
+    cardBg: 'bg-zinc-900 border border-zinc-800 text-zinc-100',
+    accentBg: 'bg-emerald-600 hover:bg-emerald-500 text-white',
+    accentText: 'text-emerald-400',
+    previewPrimary: '#09090b',
+    previewSecondary: '#27272a',
+  },
+  {
+    id: 'teal',
+    name: 'Teal Ocean',
+    description: 'Modern industrial water & clean-tech inspired palette',
+    sidebarBg: 'bg-teal-950',
+    sidebarText: 'text-teal-100',
+    headerBg: 'bg-white border-b border-teal-100 text-slate-800',
+    mainBg: 'bg-teal-50/40',
+    cardBg: 'bg-white border border-teal-100 text-slate-800',
+    accentBg: 'bg-teal-600 hover:bg-teal-700 text-white',
+    accentText: 'text-teal-600',
+    previewPrimary: '#134e4a',
+    previewSecondary: '#0d9488',
+  },
+  {
+    id: 'slate',
+    name: 'Slate Minimal',
+    description: 'Neutral distraction-free monochrome enterprise workspace',
+    sidebarBg: 'bg-neutral-900',
+    sidebarText: 'text-neutral-200',
+    headerBg: 'bg-white border-b border-neutral-200 text-neutral-800',
+    mainBg: 'bg-neutral-50',
+    cardBg: 'bg-white border border-neutral-200 text-neutral-800',
+    accentBg: 'bg-neutral-800 hover:bg-neutral-900 text-white',
+    accentText: 'text-neutral-800',
+    previewPrimary: '#171717',
+    previewSecondary: '#525252',
   },
 ];
 
-// ============================================================
-// PROPS
-// ============================================================
-interface SettingsPanelProps {
-  currentThemeId: string;
-  onThemeChange: (themeId: string) => void;
-  // Emission Factors Props
-  settingsFactors: any; // Using any to avoid strict typing conflicts if imported from elsewhere
-  setSettingsFactors: (val: any) => void;
-  isSuper: boolean;
-  onSaveSettings: () => void;
-  n: (val: any) => number;
+interface EmissionFactorRow {
+  id: string;
+  source: string;
+  unit: string;
+  co2eFactor: string;
+  energyFactor: string;
+  reference: string;
 }
 
-// ============================================================
-// COMPONENT
-// ============================================================
-const SettingsPanel: React.FC<SettingsPanelProps> = ({
-  currentThemeId,
-  onThemeChange,
-  settingsFactors,
-  setSettingsFactors,
-  isSuper,
-  onSaveSettings,
-  n,
-}) => {
-  const [localTheme, setLocalTheme] = useState(currentThemeId || 'emerald');
+const DEFAULT_FACTORS: EmissionFactorRow[] = [
+  { id: 'grid', source: 'Grid Electricity (Bangladesh National Grid)', unit: 'kWh', co2eFactor: '0.620', energyFactor: '3.60', reference: 'DoE / IGES Grid EF' },
+  { id: 'ngas', source: 'Natural Gas', unit: 'm³', co2eFactor: '1.930', energyFactor: '37.26', reference: 'IPCC 2006 / Petrobangla' },
+  { id: 'diesel', source: 'Diesel (Generator / Boiler)', unit: 'Liter', co2eFactor: '2.680', energyFactor: '36.40', reference: 'DEFRA / IPCC' },
+  { id: 'hfo', source: 'Furnace Oil (HFO)', unit: 'Liter', co2eFactor: '3.110', energyFactor: '40.40', reference: 'DEFRA / IPCC' },
+  { id: 'cng', source: 'CNG (Compressed Natural Gas)', unit: 'm³', co2eFactor: '1.950', energyFactor: '38.00', reference: 'IPCC 2006' },
+  { id: 'lpg', source: 'LPG (Liquefied Petroleum Gas)', unit: 'Kg', co2eFactor: '2.980', energyFactor: '46.10', reference: 'DEFRA / IPCC' },
+  { id: 'biomass', source: 'Biomass / Wood Husk (Net CO2e)', unit: 'Kg', co2eFactor: '0.015', energyFactor: '15.50', reference: 'Higg FEM / IPCC' },
+  { id: 'r22', source: 'Refrigerant R-22 (GWP)', unit: 'Kg', co2eFactor: '1810', energyFactor: '0', reference: 'IPCC AR5' },
+  { id: 'r410a', source: 'Refrigerant R-410A (GWP)', unit: 'Kg', co2eFactor: '2088', energyFactor: '0', reference: 'IPCC AR5' },
+  { id: 'r134a', source: 'Refrigerant R-134a (GWP)', unit: 'Kg', co2eFactor: '1430', energyFactor: '0', reference: 'IPCC AR5' },
+];
 
-  useEffect(() => {
-    setLocalTheme(currentThemeId);
-  }, [currentThemeId]);
+interface SettingsPanelProps {
+  currentTheme: ThemeKey;
+  onSelectTheme: (theme: ThemeKey) => void;
+  userRole?: string;
+  restGet?: (...args: any[]) => Promise<any>;
+  restSet?: (...args: any[]) => Promise<any>;
+}
 
-  const handleThemeSelect = (themeId: string) => {
-    setLocalTheme(themeId);
-    localStorage.setItem('portal_theme', themeId);
-    onThemeChange(themeId);
+export default function SettingsPanel({
+  currentTheme,
+  onSelectTheme,
+  userRole = 'super_admin',
+  restGet,
+  restSet,
+}: SettingsPanelProps) {
+  const [activeTab, setActiveTab] = useState<'theme' | 'factors' | 'governance' | 'alerts'>('theme');
+  const [factorYear, setFactorYear] = useState<string>('2026');
+  const [factors, setFactors] = useState<EmissionFactorRow[]>(DEFAULT_FACTORS);
+
+  const [lockYear, setLockYear] = useState<string>('2026');
+  const [lockedUnits, setLockedUnits] = useState<Record<string, boolean>>({});
+  const [orgName, setOrgName] = useState<string>('Epyllion Group');
+  const [baselineYear, setBaselineYear] = useState<string>('2023');
+
+  const [warningDays, setWarningDays] = useState<string>('60');
+  const [criticalDays, setCriticalDays] = useState<string>('30');
+  const [submissionDay, setSubmissionDay] = useState<string>('10');
+  const [enableLicenseAlert, setEnableLicenseAlert] = useState<boolean>(true);
+  const [enableMonthlyAlert, setEnableMonthlyAlert] = useState<boolean>(true);
+  const [enableKpiAlert, setEnableKpiAlert] = useState<boolean>(true);
+
+  const [saving, setSaving] = useState<boolean>(false);
+  const [toast, setToast] = useState<string>('');
+
+  const isViewer = userRole === 'viewer';
+  const isDark = currentTheme === 'midnight';
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 3500);
   };
 
-  const activeTheme = THEMES.find(t => t.id === localTheme) || THEMES[0];
-  const isDark = activeTheme.id === 'midnight';
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (!restGet) return;
+      try {
+        const savedFactors = await restGet(`settings/emission_factors_${factorYear}`);
+        if (savedFactors && Array.isArray(savedFactors.rows)) {
+          setFactors(savedFactors.rows);
+        } else {
+          setFactors(DEFAULT_FACTORS);
+        }
+
+        const savedGov = await restGet('settings/governance_config');
+        if (savedGov) {
+          if (savedGov.orgName) setOrgName(savedGov.orgName);
+          if (savedGov.baselineYear) setBaselineYear(savedGov.baselineYear);
+          if (savedGov.lockedUnits) setLockedUnits(savedGov.lockedUnits);
+        }
+
+        const savedAlerts = await restGet('settings/alert_rules');
+        if (savedAlerts) {
+          if (savedAlerts.warningDays) setWarningDays(savedAlerts.warningDays);
+          if (savedAlerts.criticalDays) setCriticalDays(savedAlerts.criticalDays);
+          if (savedAlerts.submissionDay) setSubmissionDay(savedAlerts.submissionDay);
+          if (typeof savedAlerts.enableLicenseAlert === 'boolean') setEnableLicenseAlert(savedAlerts.enableLicenseAlert);
+          if (typeof savedAlerts.enableMonthlyAlert === 'boolean') setEnableMonthlyAlert(savedAlerts.enableMonthlyAlert);
+          if (typeof savedAlerts.enableKpiAlert === 'boolean') setEnableKpiAlert(savedAlerts.enableKpiAlert);
+        }
+      } catch (e) {
+        console.error('Settings load note:', e);
+      }
+    };
+    loadSettings();
+  }, [factorYear]);
+
+  const handleSaveData = async (docKey: string, payload: any, label: string) => {
+    if (isViewer) return;
+    setSaving(true);
+    try {
+      if (restSet) {
+        await restSet(`settings/${docKey}`, { ...payload, updatedAt: new Date().toISOString() });
+      }
+      showToast(`${label} saved successfully!`);
+    } catch (e) {
+      showToast('Saved locally (sync pending).');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addCustomFactor = () => {
+    setFactors([
+      ...factors,
+      { id: `custom_${Date.now()}`, source: '', unit: 'Kg', co2eFactor: '0', energyFactor: '0', reference: 'Custom' },
+    ]);
+  };
+
+  const updateFactor = (idx: number, field: keyof EmissionFactorRow, val: string) => {
+    const updated = [...factors];
+    updated[idx] = { ...updated[idx], [field]: val };
+    setFactors(updated);
+  };
+
+  const removeFactor = (idx: number) => {
+    setFactors(factors.filter((_, i) => i !== idx));
+  };
+
+  const toggleUnitLock = (unitCode: string) => {
+    const key = `${lockYear}_${unitCode}`;
+    setLockedUnits({ ...lockedUnits, [key]: !lockedUnits[key] });
+  };
+
+  const cardClass = isDark
+    ? 'bg-zinc-900 border border-zinc-800 text-zinc-100'
+    : 'bg-white border border-slate-200 text-slate-800';
+
+  const inputClass = isDark
+    ? 'bg-zinc-800 border-zinc-700 text-zinc-100 focus:border-emerald-500'
+    : 'bg-white border-slate-300 text-slate-800 focus:border-emerald-600';
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      
-      {/* THEME SETTINGS SECTION */}
-      <div className={`rounded-xl border shadow-sm p-6 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200'}`}>
-        <div className="flex items-center gap-3 mb-6">
-          <div className={`p-2 rounded-lg ${activeTheme.accentBadge}`}>
-            <Palette size={20} />
-          </div>
-          <div>
-            <h2 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              Theme & Appearance
-            </h2>
-            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-              Personalize your portal experience. Changes are applied instantly.
-            </p>
-          </div>
+    <div className="space-y-6">
+      {/* Header Banner */}
+      <div className={`p-6 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4 ${cardClass}`}>
+        <div>
+          <h2 className="text-xl font-bold">Portal Settings & Configuration</h2>
+          <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>
+            Manage visual appearance, GHG emission factors, audit data locks, and compliance alerts
+          </p>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {THEMES.map((theme) => {
-            const isSelected = localTheme === theme.id;
-            const isThemeDark = theme.id === 'midnight';
-            
-            return (
-              <button
-                key={theme.id}
-                onClick={() => handleThemeSelect(theme.id)}
-                className={`relative text-left rounded-xl border-2 transition-all duration-200 overflow-hidden group
-                  ${isSelected 
-                    ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md scale-[1.02]' 
-                    : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
-                  }
-                  ${isThemeDark ? 'bg-slate-800' : 'bg-white'}
-                `}
-              >
-                {/* Visual Preview Area */}
-                <div className={`h-24 p-4 flex gap-2 items-center ${isThemeDark ? 'bg-slate-800' : 'bg-gray-50'}`}>
-                  {theme.previewColors.map((color, idx) => (
-                    <div 
-                      key={idx} 
-                      className="w-8 h-8 rounded-full shadow-sm border border-black/5"
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-
-                {/* Content Area */}
-                <div className={`p-4 ${isThemeDark ? 'bg-slate-900' : 'bg-white'}`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className={`font-bold text-sm ${isThemeDark ? 'text-white' : 'text-gray-900'}`}>
-                      {theme.name}
-                    </h3>
-                    {isSelected && (
-                      <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white">
-                        <Check size={12} strokeWidth={3} />
-                      </span>
-                    )}
-                  </div>
-                  <p className={`text-xs leading-relaxed ${isThemeDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                    {theme.description}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* EMISSION FACTORS SECTION */}
-      <div className={`rounded-xl border shadow-sm p-6 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200'}`}>
-        <div className="flex items-center gap-3 mb-6">
-          <div className={`p-2 rounded-lg ${activeTheme.accentBadge}`}>
-            <Factory size={20} />
-          </div>
-          <div>
-            <h2 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              Emission Factors
-            </h2>
-            <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-              Configure global kg CO2e factors used for auto-calculations.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {([
-            ['grid_electricity','Grid Electricity (kWh)'],
-            ['natural_gas','Natural Gas (m³)'],
-            ['diesel','Diesel (L)'],
-            ['petrol_octane','Petrol/Octane (L)'],
-            ['cng','CNG (m³)'],
-          ] as [string, string][]).map(([k, l]) => (
-            <div key={k}>
-              <label className={`block text-xs font-semibold mb-1.5 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-                {l}
-              </label>
-              <input 
-                type="number" 
-                value={settingsFactors[k]} 
-                disabled={!isSuper}
-                onChange={e => setSettingsFactors({ ...settingsFactors, [k]: n(e.target.value) })}
-                className={`w-full px-3 py-2 border rounded-lg text-sm outline-none transition-colors
-                  ${isDark 
-                    ? 'bg-slate-800 border-slate-700 text-white focus:border-emerald-500 disabled:opacity-50' 
-                    : 'bg-white border-gray-300 text-gray-900 focus:border-emerald-500 disabled:bg-gray-50'
-                  }
-                `} 
-              />
-            </div>
-          ))}
-        </div>
-
-        {isSuper && (
-          <div className="mt-6 flex justify-end">
-            <button 
-              onClick={onSaveSettings} 
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all shadow-sm ${activeTheme.primaryBtn}`}
-            >
-              <Save size={16} /> Save Emission Factors
-            </button>
-          </div>
-        )}
-      </div>
-
-    </div>
-  );
-};
-
-export default SettingsPanel;
+        {toast && (
