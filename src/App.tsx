@@ -942,28 +942,30 @@ const App: React.FC = () => {
             />
           )}
 
-                    {activeModule.startsWith('fp_') && (
-            <FactoryProfile 
-              activeSubModule={activeModule} 
-              selectedUnit={factory} 
-              unitFullName={UNIT_FULL_NAMES[factory] || factory} 
-              userRole={user?.role || 'viewer'} 
-              restSet={restSet as any} 
-              restGet={restGet as any} 
+                              {activeModule.startsWith('fp_') && (
+            <FactoryProfile
+              activeSubModule={activeModule}
+              selectedUnit={factory}
+              unitFullName={UNIT_FULL_NAMES[factory] || factory}
+              userRole={user?.role || 'viewer'}
+              restGet={(path: string) => restGet('factory_profile', path.replace(/\//g, '_'))}
+              restSet={(path: string, data: any) => restSet('factory_profile', path.replace(/\//g, '_'), data)}
             />
           )}
+
           {/* NEW INVENTORY MANAGEMENT COMPONENT */}
-          {activeModule.startsWith('inv_')&& !activeModule.startsWith('fp_') && (
-            <InventoryManagement 
-              activeSubModule={activeModule} 
-              selectedUnit={factory} 
-              selectedYear={year.toString()} 
-              userRole={user?.role || 'viewer'} 
+          {activeModule.startsWith('inv_') && (
+            <InventoryManagement
+              activeSubModule={activeModule}
+              selectedUnit={factory}
+              selectedYear={year.toString()}
+              userRole={user?.role || 'viewer'}
             />
           )}
 
           {/* PLACEHOLDER FOR OTHER NEW MODULES */}
-          {activeRoute && !activeModule.startsWith('inv_') && (
+          {activeRoute && !activeModule.startsWith('inv_') && !activeModule.startsWith('fp_') && (
+
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 min-h-[60vh] flex flex-col items-center justify-center text-center">
               <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mb-6">
                 <Factory className="text-emerald-600" size={32} />
