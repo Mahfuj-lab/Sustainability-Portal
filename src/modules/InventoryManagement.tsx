@@ -104,11 +104,6 @@ const SUB_MODULES_MAP: Record<string, { title: string; icon: React.ElementType; 
     icon: Beaker,
     description: 'Inventory of chemicals used in production, including MSDS tracking and usage.'
   },
-  'inv_air_emission': { 
-    title: 'Air Emission Inventory', 
-    icon: Activity,
-    description: 'Track stack emissions, particulate matter, and other air pollutants.'
-  },
   'inv_ppe_inventory': { 
     title: 'PPE Inventory', 
     icon: Shield,
