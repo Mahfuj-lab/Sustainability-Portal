@@ -1,4 +1,5 @@
 import React from 'react';
+import WasteManagementForm from './WasteManagementForm';
 import WaterWithdrawalForm from './WaterWithdrawalForm';
 import BoilerGeneratorCompressorForm from './BoilerGeneratorCompressorForm';
 import NaturalGasDieselVehiclesForm from './NaturalGasDieselVehiclesForm';
@@ -154,7 +155,9 @@ if (activeSubModule === 'inv_electricity_solar') {
   if (activeSubModule === 'inv_water_withdrawal') {
     return <WaterWithdrawalForm selectedUnit={selectedUnit} selectedYear={selectedYear}  />;
   }
-
+if (activeSubModule === 'inv_solid_waste') {
+  return <WasteManagementForm selectedUnit={selectedUnit} selectedYear={selectedYear} />;
+}
   return (
     <div className="space-y-6">
       {/* HEADER SECTION */}
