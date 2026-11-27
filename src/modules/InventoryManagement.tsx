@@ -1,4 +1,5 @@
 import React from 'react';
+import GhgEmissionSummaryForm from './GhgEmissionSummaryForm';
 import RefrigerantOdsForm from './RefrigerantOdsForm';
 import WasteManagementForm from './WasteManagementForm';
 import WaterWithdrawalForm from './WaterWithdrawalForm';
@@ -162,6 +163,9 @@ if (activeSubModule === 'inv_electricity_solar') {
 if (activeSubModule === 'inv_solid_waste') {
   return <WasteManagementForm selectedUnit={selectedUnit} selectedYear={selectedYear} />;
 }
+    if (activeSubModule === 'inv_ghg_emission' || activeSubModule === 'inv_ghg') {
+    return <GhgEmissionSummaryForm selectedUnit={selectedUnit} selectedYear={selectedYear} />;
+  }
   return (
     <div className="space-y-6">
       {/* HEADER SECTION */}
