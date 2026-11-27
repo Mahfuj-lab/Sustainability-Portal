@@ -38,6 +38,94 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+// ---------------------------------------------------------------------------
+// Design tokens (UI only - the export/print HTML template keeps its own styles)
+// ---------------------------------------------------------------------------
+const INPUT_CLASS =
+  'w-24 border border-slate-300 bg-white rounded px-2 py-1 text-right text-xs text-slate-900 shadow-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed';
+
+const BUYER_INPUT_CLASS =
+  'w-full border border-slate-300 bg-white rounded px-2 py-1 text-center text-xs font-medium text-slate-900 shadow-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed';
+
+const REMARKS_INPUT_CLASS =
+  'w-full min-w-[160px] border border-slate-300 bg-white rounded px-2 py-1 text-left text-xs text-slate-900 shadow-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed';
+
+interface SectionTheme {
+  header: string;      // section group header
+  subHeader: string;   // column sub-header
+  cell: string;        // column body tint
+  locked: string;      // locked/auto-calculated cell
+  footer: string;      // footer total cell
+  footerLocked: string;
+  border: string;
+}
+
+const THEMES: Record<SectionKey, SectionTheme> = {
+  ops: {
+    header: 'bg-emerald-200 text-emerald-950 border-emerald-400',
+    subHeader: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+    cell: 'bg-emerald-50/70 border-emerald-200',
+    locked: 'bg-emerald-200/70 text-emerald-950 font-bold border-emerald-300',
+    footer: 'bg-emerald-200 text-emerald-950 font-bold border-emerald-400',
+    footerLocked: 'bg-emerald-300 text-emerald-950 font-extrabold border-emerald-500',
+    border: 'border-emerald-300',
+  },
+  prod: {
+    header: 'bg-sky-200 text-sky-950 border-sky-400',
+    subHeader: 'bg-sky-100 text-sky-900 border-sky-300',
+    cell: 'bg-sky-50/70 border-sky-200',
+    locked: 'bg-sky-200/70 text-sky-950 font-bold border-sky-300',
+    footer: 'bg-sky-200 text-sky-950 font-bold border-sky-400',
+    footerLocked: 'bg-sky-300 text-sky-950 font-extrabold border-sky-500',
+    border: 'border-sky-300',
+  },
+  shipPcs: {
+    header: 'bg-indigo-200 text-indigo-950 border-indigo-400',
+    subHeader: 'bg-indigo-100 text-indigo-900 border-indigo-300',
+    cell: 'bg-indigo-50/70 border-indigo-200',
+    locked: 'bg-indigo-200/70 text-indigo-950 font-bold border-indigo-300',
+    footer: 'bg-indigo-200 text-indigo-950 font-bold border-indigo-400',
+    footerLocked: 'bg-indigo-300 text-indigo-950 font-extrabold border-indigo-500',
+    border: 'border-indigo-300',
+  },
+  shipKg: {
+    header: 'bg-amber-200 text-amber-950 border-amber-400',
+    subHeader: 'bg-amber-100 text-amber-900 border-amber-300',
+    cell: 'bg-amber-50/70 border-amber-200',
+    locked: 'bg-amber-200/70 text-amber-950 font-bold border-amber-300',
+    footer: 'bg-amber-200 text-amber-950 font-bold border-amber-400',
+    footerLocked: 'bg-amber-300 text-amber-950 font-extrabold border-amber-500',
+    border: 'border-amber-300',
+  },
+  shipSam: {
+    header: 'bg-orange-200 text-orange-950 border-orange-400',
+    subHeader: 'bg-orange-100 text-orange-900 border-orange-300',
+    cell: 'bg-orange-50/70 border-orange-200',
+    locked: 'bg-orange-200/70 text-orange-950 font-bold border-orange-300',
+    footer: 'bg-orange-200 text-orange-950 font-bold border-orange-400',
+    footerLocked: 'bg-orange-300 text-orange-950 font-extrabold border-orange-500',
+    border: 'border-orange-300',
+  },
+  remarks: {
+    header: 'bg-slate-200 text-slate-900 border-slate-400',
+    subHeader: 'bg-slate-100 text-slate-800 border-slate-300',
+    cell: 'bg-slate-50/70 border-slate-200',
+    locked: 'bg-slate-200/70 text-slate-900 font-bold border-slate-300',
+    footer: 'bg-slate-200 text-slate-700 font-bold border-slate-400',
+    footerLocked: 'bg-slate-300 text-slate-900 font-extrabold border-slate-500',
+    border: 'border-slate-300',
+  },
+};
+
+const SECTION_TITLES: Record<SectionKey, string> = {
+  ops: 'Factory Operations',
+  prod: 'Production Quantity (PCS)',
+  shipPcs: 'Shipment Quantity (PCS)',
+  shipKg: 'Shipment Quantity (KG)',
+  shipSam: 'Shipment Quantity (SAM)',
+  remarks: 'Remarks',
+};
+
 const n = (val: any): number => {
   const num = parseFloat(val);
   return isNaN(num) ? 0 : num;
@@ -472,14 +560,43 @@ export default function ProductionOperationsForm({
     setSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // -------------------------------------------------------------------------
+  // UI helpers
+  // -------------------------------------------------------------------------
+  const BUYER_SECTIONS = ['prod', 'shipPcs', 'shipKg', 'shipSam'] as const;
+
+  const AddBuyerInline = () =>
+    !isViewer ? (
+      <button
+        type="button"
+        onClick={addBuyer}
+        title="Add Buyer"
+        className="no-print inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded border border-slate-900 bg-white text-slate-900 text-[11px] font-bold normal-case tracking-normal hover:bg-slate-900 hover:text-white transition-colors"
+      >
+        <Plus size={12} /> Add Buyer
+      </button>
+    ) : null;
+
+  const opsColumns: { field: keyof MonthData; label: string }[] = [
+    { field: 'manPower', label: 'Man Power' },
+    { field: 'workingDays', label: 'Working Days' },
+    { field: 'availableHour', label: 'Available Hour' },
+    { field: 'produceHour', label: 'Produce Hour' },
+    { field: 'totalMTO', label: 'Total MTO' },
+    { field: 'efficiency', label: 'Efficiency (%)' },
+    { field: 'averageSMV', label: 'Avg SMV' },
+  ];
+
+  const opsFooterFields = ['manPower', 'workingDays', 'availableHour', 'produceHour', 'totalMTO'] as const;
+
   return (
-    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm">
+    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm border border-slate-200">
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Production &amp; Operations</h1>
-          <div className="flex items-center gap-2 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900">Production &amp; Operations</h1>
+          <div className="flex flex-wrap items-center gap-2 mt-1">
             <p className="text-sm text-slate-500">{unitInfo.fullName}</p>
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
               Reporting Year: {safeYear}
             </span>
           </div>
@@ -516,8 +633,8 @@ export default function ProductionOperationsForm({
         </div>
       </div>
 
-      <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-4 text-sm no-print">
-        <span className="font-semibold text-slate-700 mr-2">Report Columns / Sections to Export &amp; Print:</span>
+      <div className="mb-4 bg-slate-50 border border-slate-300 rounded-lg p-3 flex flex-wrap items-center gap-4 text-sm no-print">
+        <span className="font-semibold text-slate-800 mr-2">Report Columns / Sections to Export &amp; Print:</span>
         
         <label className="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" checked={sections.ops} onChange={() => toggleSection('ops')} className="accent-emerald-600 w-4 h-4" />
@@ -551,189 +668,200 @@ export default function ProductionOperationsForm({
         </div>
       )}
 
-      <div className="overflow-x-auto border border-slate-200 rounded-lg">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-600 font-semibold">
+      <div className="overflow-x-auto border-2 border-slate-300 rounded-lg shadow-sm">
+        <table className="w-full text-sm text-left border-collapse">
+          <thead className="text-xs font-semibold">
             <tr>
-              <th className="px-2 py-2 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 w-24 text-center">Month</th>
+              <th rowSpan={2} className="px-3 py-2 sticky left-0 bg-slate-200 text-slate-900 z-20 border border-slate-400 w-28 text-center font-bold uppercase tracking-wider">
+                Month
+              </th>
+
               {sections.ops && (
-                <th colSpan={7} className="px-2 py-2 bg-emerald-100 text-emerald-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Factory Operations
+                <th colSpan={7} className={`px-2 py-2 border text-center font-bold uppercase tracking-wider ${THEMES.ops.header}`}>
+                  {SECTION_TITLES.ops}
                 </th>
               )}
-              {sections.prod && (
-                <th colSpan={buyers.length + 1} className="px-2 py-2 bg-blue-100 text-blue-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Production Quantity (pcs)
-                </th>
-              )}
-              {sections.shipPcs && (
-                <th colSpan={buyers.length + 1} className="px-2 py-2 bg-indigo-100 text-indigo-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Shipment Quantity (pcs)
-                </th>
-              )}
-              {sections.shipKg && (
-                <th colSpan={buyers.length + 1} className="px-2 py-2 bg-amber-100 text-amber-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Shipment Quantity (kg)
-                </th>
-              )}
-              {sections.shipSam && (
-                <th colSpan={buyers.length + 1} className="px-2 py-2 bg-orange-100 text-orange-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Shipment Quantity (SAM)
-                </th>
-              )}
+
+              {BUYER_SECTIONS.map((secKey) => {
+                if (!sections[secKey]) return null;
+                const theme = THEMES[secKey];
+                return (
+                  <th key={`hdr-${secKey}`} colSpan={buyers.length + 1} className={`px-2 py-2 border text-center font-bold uppercase tracking-wider ${theme.header}`}>
+                    <span className="inline-flex items-center justify-center flex-wrap">
+                      {SECTION_TITLES[secKey]}
+                      {secKey === 'prod' && <AddBuyerInline />}
+                    </span>
+                  </th>
+                );
+              })}
+
               {sections.remarks && (
-                <th className="px-2 py-2 bg-gray-100 text-gray-900 text-center font-bold uppercase tracking-wider">
-                  Remarks
+                <th rowSpan={2} className={`px-2 py-2 border text-center align-middle font-bold uppercase tracking-wider min-w-[180px] ${THEMES.remarks.header}`}>
+                  {SECTION_TITLES.remarks}
                 </th>
               )}
             </tr>
             
             <tr>
-              <th className="px-2 py-2 sticky left-0 bg-slate-50 z-20 border-r border-slate-200"></th>
-              
               {sections.ops && (
                 <>
-                  <th className="px-2 py-2 text-center whitespace-nowrap">Man Power</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap">Working Days</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap">Available Hour</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap">Produce Hour</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap">Total MTO</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Efficiency (%)</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap border-r border-slate-200">Avg SMV</th>
+                  {opsColumns.map((col) => (
+                    <th
+                      key={col.field}
+                      className={`px-2 py-2 border text-center whitespace-nowrap ${THEMES.ops.subHeader} ${col.field === 'efficiency' ? 'font-extrabold' : ''}`}
+                    >
+                      {col.label}
+                    </th>
+                  ))}
                 </>
               )}
 
-              {(['prod', 'shipPcs', 'shipKg', 'shipSam'] as const).map((secKey) => {
+              {BUYER_SECTIONS.map((secKey) => {
                 if (!sections[secKey]) return null;
+                const theme = THEMES[secKey];
                 return (
                   <React.Fragment key={secKey}>
                     {buyers.map((b, bIdx) => (
-                      <th key={b.id} className="px-2 py-1 text-center align-top min-w-[100px]">
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="flex items-center justify-between w-full gap-1">
-                            <input
-                              type="text"
-                              placeholder={`Buyer ${bIdx + 1}`}
-                              value={b.name}
-                              onChange={(e) => updateBuyerName(b.id, e.target.value)}
-                              disabled={isViewer}
-                              className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-emerald-500 disabled:bg-transparent disabled:border-transparent"
-                            />
-                            {!isViewer && buyers.length > 1 && (
-                              <button
-                                onClick={() => removeBuyer(b.id)}
-                                className="text-red-500 hover:text-red-700 no-print"
-                                title="Remove Buyer"
-                              >
-                                <X size={12} />
-                              </button>
-                            )}
-                          </div>
+                      <th key={b.id} className={`px-2 py-1.5 border text-center align-middle min-w-[120px] ${theme.subHeader}`}>
+                        <div className="flex items-center justify-between w-full gap-1">
+                          <input
+                            type="text"
+                            placeholder={`Buyer ${bIdx + 1}`}
+                            value={b.name}
+                            onChange={(e) => updateBuyerName(b.id, e.target.value)}
+                            disabled={isViewer}
+                            className={BUYER_INPUT_CLASS}
+                          />
+                          {!isViewer && buyers.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeBuyer(b.id)}
+                              className="no-print flex-shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border border-red-300 bg-white text-red-600 hover:bg-red-600 hover:text-white transition-colors"
+                              title="Remove Buyer"
+                            >
+                              <X size={12} />
+                            </button>
+                          )}
                         </div>
                       </th>
                     ))}
-                    <th className="px-2 py-2 text-center whitespace-nowrap font-bold bg-slate-100 border-r border-slate-200">Total</th>
+                    <th className={`px-2 py-2 border text-center whitespace-nowrap font-extrabold uppercase tracking-wide ${theme.locked}`}>
+                      Total
+                    </th>
                   </React.Fragment>
                 );
               })}
-
-              {sections.remarks && (
-                <th className="px-2 py-2 text-center align-top min-w-[150px]"></th>
-              )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
-            {MONTHS.map((month, idx) => {
+
+          <tbody>
+            {MONTHS.map((month) => {
               const row = data[month] || getEmptyMonth();
               return (
-                <tr key={month} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                  <td className="px-2 py-1 font-semibold text-slate-700 sticky left-0 bg-inherit z-10 border-r border-slate-200">{month}</td>
+                <tr key={month}>
+                  <td className="px-3 py-1.5 font-bold text-slate-900 sticky left-0 bg-slate-100 z-10 border border-slate-300">
+                    {month}
+                  </td>
                   
                   {sections.ops && (
                     <>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.manPower} onChange={(e) => updateMonthField(month, 'manPower', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.workingDays} onChange={(e) => updateMonthField(month, 'workingDays', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.availableHour} onChange={(e) => updateMonthField(month, 'availableHour', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.produceHour} onChange={(e) => updateMonthField(month, 'produceHour', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.totalMTO} onChange={(e) => updateMonthField(month, 'totalMTO', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.efficiency} onChange={(e) => updateMonthField(month, 'efficiency', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-1 py-1 border-r border-slate-200"><input type="text" inputMode="decimal" value={row.averageSMV} onChange={(e) => updateMonthField(month, 'averageSMV', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
+                      {opsColumns.map((col) => (
+                        <td key={`${month}-${col.field}`} className={`px-1.5 py-1.5 border ${THEMES.ops.cell}`}>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={row[col.field] as string}
+                            onChange={(e) => updateMonthField(month, col.field, e.target.value)}
+                            disabled={isViewer}
+                            className={INPUT_CLASS}
+                          />
+                        </td>
+                      ))}
                     </>
                   )}
 
-                  {(['prod', 'shipPcs', 'shipKg', 'shipSam'] as const).map((secKey) => {
+                  {BUYER_SECTIONS.map((secKey) => {
                     if (!sections[secKey]) return null;
                     const dataKey = secKey === 'prod' ? 'prodPcs' : secKey;
-                    const colorClass = 
-                      secKey === 'prod' ? 'text-blue-700 bg-blue-50/30' : 
-                      secKey === 'shipPcs' ? 'text-indigo-700 bg-indigo-50/30' : 
-                      secKey === 'shipKg' ? 'text-amber-700 bg-amber-50/30' : 
-                      'text-orange-700 bg-orange-50/30';
+                    const theme = THEMES[secKey];
 
                     return (
                       <React.Fragment key={secKey}>
                         {buyers.map(b => (
-                          <td key={`${month}-${secKey}-${b.id}`} className="px-1 py-1">
-                            <input type="text" inputMode="decimal" value={row[dataKey]?.[b.id] || ''} onChange={(e) => updateBuyerQty(month, dataKey, b.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                          <td key={`${month}-${secKey}-${b.id}`} className={`px-1.5 py-1.5 border ${theme.cell}`}>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={row[dataKey]?.[b.id] || ''}
+                              onChange={(e) => updateBuyerQty(month, dataKey, b.id, e.target.value)}
+                              disabled={isViewer}
+                              className={INPUT_CLASS}
+                            />
                           </td>
                         ))}
-                        <td className={`px-2 py-1 text-right font-bold ${colorClass} border-r border-slate-200`}>{fmt(getSectionTotal(row, dataKey))}</td>
+                        <td className={`px-3 py-1.5 text-right border ${theme.locked}`}>
+                          {fmt(getSectionTotal(row, dataKey))}
+                        </td>
                       </React.Fragment>
                     );
                   })}
 
                   {sections.remarks && (
-                    <td className="px-1 py-1">
-                      <input type="text" value={row.remarks} onChange={(e) => updateMonthField(month, 'remarks', e.target.value)} disabled={isViewer} className="w-full min-w-[120px] px-2 py-1 border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" placeholder="Notes..." />
+                    <td className={`px-1.5 py-1.5 border ${THEMES.remarks.cell}`}>
+                      <input
+                        type="text"
+                        value={row.remarks}
+                        onChange={(e) => updateMonthField(month, 'remarks', e.target.value)}
+                        disabled={isViewer}
+                        className={REMARKS_INPUT_CLASS}
+                        placeholder="Notes..."
+                      />
                     </td>
                   )}
                 </tr>
               );
             })}
           </tbody>
-          <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-bold text-xs">
+
+          <tfoot className="text-xs">
             <tr>
-              <td className="px-2 py-2 sticky left-0 bg-slate-100 z-10 border-r border-slate-300">Total</td>
+              <td className="px-3 py-2 sticky left-0 bg-slate-300 text-slate-900 font-extrabold uppercase tracking-wider z-10 border border-slate-500">
+                Total
+              </td>
               
               {sections.ops && (
                 <>
-                  <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('manPower'))}</td>
-                  <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('workingDays'))}</td>
-                  <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('availableHour'))}</td>
-                  <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('produceHour'))}</td>
-                  <td className="px-2 py-2 text-right">{fmt(getFactoryYearTotal('totalMTO'))}</td>
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{getAvgEfficiency()}</td>
-                  <td className="px-2 py-2 text-right border-r border-slate-300 text-slate-400">-</td>
+                  {opsFooterFields.map((field) => (
+                    <td key={`tot-${field}`} className={`px-3 py-2 text-right border ${THEMES.ops.footer}`}>
+                      {fmt(getFactoryYearTotal(field))}
+                    </td>
+                  ))}
+                  <td className={`px-3 py-2 text-right border ${THEMES.ops.footerLocked}`}>{getAvgEfficiency()}</td>
+                  <td className={`px-3 py-2 text-right border ${THEMES.ops.footer} text-slate-500`}>-</td>
                 </>
               )}
 
-              {(['prod', 'shipPcs', 'shipKg', 'shipSam'] as const).map((secKey) => {
+              {BUYER_SECTIONS.map((secKey) => {
                 if (!sections[secKey]) return null;
                 const dataKey = secKey === 'prod' ? 'prodPcs' : secKey;
-                const colorClass = 
-                  secKey === 'prod' ? 'text-blue-800' : 
-                  secKey === 'shipPcs' ? 'text-indigo-800' : 
-                  secKey === 'shipKg' ? 'text-amber-800' : 
-                  'text-orange-800';
-
-                const bgClass = 
-                  secKey === 'prod' ? 'bg-blue-100/50' : 
-                  secKey === 'shipPcs' ? 'bg-indigo-100/50' : 
-                  secKey === 'shipKg' ? 'bg-amber-100/50' : 
-                  'bg-orange-100/50';
+                const theme = THEMES[secKey];
 
                 return (
                   <React.Fragment key={secKey}>
                     {buyers.map(b => (
-                      <td key={`total-${secKey}-${b.id}`} className={`px-2 py-2 text-right ${colorClass}`}>{fmt(getBuyerYearTotal(b.id, dataKey))}</td>
+                      <td key={`total-${secKey}-${b.id}`} className={`px-3 py-2 text-right border ${theme.footer}`}>
+                        {fmt(getBuyerYearTotal(b.id, dataKey))}
+                      </td>
                     ))}
-                    <td className={`px-2 py-2 text-right ${colorClass} ${bgClass} border-r border-slate-300`}>{fmt(getColumnYearTotal(dataKey))}</td>
+                    <td className={`px-3 py-2 text-right border ${theme.footerLocked}`}>
+                      {fmt(getColumnYearTotal(dataKey))}
+                    </td>
                   </React.Fragment>
                 );
               })}
 
               {sections.remarks && (
-                <td className="px-2 py-2 text-right text-slate-400">-</td>
+                <td className={`px-3 py-2 text-right border ${THEMES.remarks.footer}`}>-</td>
               )}
             </tr>
           </tfoot>
@@ -744,7 +872,7 @@ export default function ProductionOperationsForm({
         <div className="mt-4 no-print">
           <button
             onClick={addBuyer}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-semibold transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-900 text-slate-900 hover:text-white border border-slate-900 rounded-lg text-sm font-semibold transition-colors"
           >
             <Plus size={16} /> Add Buyer
           </button>
