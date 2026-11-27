@@ -163,7 +163,7 @@ if (activeSubModule === 'inv_electricity_solar') {
 if (activeSubModule === 'inv_solid_waste') {
   return <WasteManagementForm selectedUnit={selectedUnit} selectedYear={selectedYear} />;
 }
-    if (activeSubModule === 'inv_ghg_emission' || activeSubModule === 'inv_ghg') {
+      if (activeSubModule === 'inv_ghg_summary' || activeSubModule === 'inv_ghg_emission') {
     return <GhgEmissionSummaryForm selectedUnit={selectedUnit} selectedYear={selectedYear} />;
   }
   return (
