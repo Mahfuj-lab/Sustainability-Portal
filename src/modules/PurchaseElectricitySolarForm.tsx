@@ -35,6 +35,136 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+/* ------------------------------------------------------------------ */
+/*  Section color themes (full class strings so Tailwind can see them) */
+/* ------------------------------------------------------------------ */
+interface Theme {
+  band: string;        // main section header band
+  sub: string;         // sub-header cells (meter names, column titles)
+  micro: string;       // third-level header cells (Off Peak / Peak / Flat)
+  tint: string;        // editable column background tint
+  locked: string;      // read-only auto-calculated cell
+  lockedStrong: string; // read-only main total cell
+  foot: string;        // bottom Total row cell
+  border: string;      // section border color
+  focus: string;       // input focus style
+  addBtn: string;      // inline add button
+}
+
+const THEMES: Record<'amber' | 'emerald' | 'sky' | 'orange' | 'slate', Theme> = {
+  amber: {
+    band: 'bg-amber-200 text-amber-950',
+    sub: 'bg-amber-100 text-amber-900',
+    micro: 'bg-amber-50 text-amber-800',
+    tint: 'bg-amber-50/70',
+    locked: 'bg-amber-100 text-amber-950',
+    lockedStrong: 'bg-amber-200 text-amber-950',
+    foot: 'bg-amber-200 text-amber-950',
+    border: 'border-amber-300',
+    focus: 'focus:border-amber-600 focus:ring-2 focus:ring-amber-200',
+    addBtn: 'bg-white text-amber-800 border-amber-400 hover:bg-amber-50',
+  },
+  emerald: {
+    band: 'bg-emerald-200 text-emerald-950',
+    sub: 'bg-emerald-100 text-emerald-900',
+    micro: 'bg-emerald-50 text-emerald-800',
+    tint: 'bg-emerald-50/70',
+    locked: 'bg-emerald-100 text-emerald-950',
+    lockedStrong: 'bg-emerald-200 text-emerald-950',
+    foot: 'bg-emerald-200 text-emerald-950',
+    border: 'border-emerald-300',
+    focus: 'focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200',
+    addBtn: 'bg-white text-emerald-800 border-emerald-400 hover:bg-emerald-50',
+  },
+  sky: {
+    band: 'bg-sky-200 text-sky-950',
+    sub: 'bg-sky-100 text-sky-900',
+    micro: 'bg-sky-50 text-sky-800',
+    tint: 'bg-sky-50/70',
+    locked: 'bg-sky-100 text-sky-950',
+    lockedStrong: 'bg-sky-200 text-sky-950',
+    foot: 'bg-sky-200 text-sky-950',
+    border: 'border-sky-300',
+    focus: 'focus:border-sky-600 focus:ring-2 focus:ring-sky-200',
+    addBtn: 'bg-white text-sky-800 border-sky-400 hover:bg-sky-50',
+  },
+  orange: {
+    band: 'bg-orange-200 text-orange-950',
+    sub: 'bg-orange-100 text-orange-900',
+    micro: 'bg-orange-50 text-orange-800',
+    tint: 'bg-orange-50/70',
+    locked: 'bg-orange-100 text-orange-950',
+    lockedStrong: 'bg-orange-200 text-orange-950',
+    foot: 'bg-orange-200 text-orange-950',
+    border: 'border-orange-300',
+    focus: 'focus:border-orange-600 focus:ring-2 focus:ring-orange-200',
+    addBtn: 'bg-white text-orange-800 border-orange-400 hover:bg-orange-50',
+  },
+  slate: {
+    band: 'bg-slate-200 text-slate-800',
+    sub: 'bg-slate-100 text-slate-700',
+    micro: 'bg-slate-50 text-slate-700',
+    tint: 'bg-slate-50',
+    locked: 'bg-slate-100 text-slate-800',
+    lockedStrong: 'bg-slate-200 text-slate-800',
+    foot: 'bg-slate-200 text-slate-800',
+    border: 'border-slate-300',
+    focus: 'focus:border-slate-500 focus:ring-2 focus:ring-slate-200',
+    addBtn: 'bg-white text-slate-700 border-slate-400 hover:bg-slate-50',
+  },
+};
+
+const INPUT_BASE =
+  'border border-slate-300 bg-white rounded px-2 py-1 text-right outline-none transition text-xs ' +
+  'disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed';
+
+interface CellInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  theme: Theme;
+  width?: string;
+  align?: 'right' | 'left';
+  placeholder?: string;
+}
+
+const CellInput: React.FC<CellInputProps> = ({
+  value,
+  onChange,
+  disabled,
+  theme,
+  width = 'w-20',
+  align = 'right',
+  placeholder,
+}) => (
+  <input
+    type="text"
+    inputMode={align === 'right' ? 'decimal' : undefined}
+    value={value}
+    onChange={(e) => onChange(e.target.value)}
+    disabled={disabled}
+    placeholder={placeholder}
+    className={`${INPUT_BASE} ${theme.focus} ${width} ${align === 'left' ? 'text-left' : ''}`}
+  />
+);
+
+interface NameInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  theme: Theme;
+}
+
+const NameInput: React.FC<NameInputProps> = ({ value, onChange, disabled, theme }) => (
+  <input
+    type="text"
+    value={value}
+    onChange={(e) => onChange(e.target.value)}
+    disabled={disabled}
+    className={`w-full min-w-[80px] border border-slate-300 bg-white rounded px-2 py-1 text-center text-xs font-semibold text-slate-800 outline-none transition disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed ${theme.focus}`}
+  />
+);
+
 const n = (val: any): number => {
   const num = parseFloat(val);
   return isNaN(num) ? 0 : num;
@@ -90,6 +220,21 @@ const isValidNumber = (val: string): boolean => {
   return /^\d*(\.\d{0,2})?$/.test(val);
 };
 
+/* ------------------------------------------------------------------ */
+/*  Export / print HTML helpers (markup identical to previous version) */
+/* ------------------------------------------------------------------ */
+const bandTh = (bg: string, text: string, colspan?: number, rowspan?: number) =>
+  `<th${colspan ? ` colspan="${colspan}"` : ''}${rowspan ? ` rowSpan="${rowspan}"` : ''} style="border: 1px solid #000; padding: 5px; background-color: ${bg}; text-align: center; font-weight: bold;">${text}</th>`;
+
+const subTh = (bg: string, text: string, colspan?: number, rowspan?: number) =>
+  `<th${colspan ? ` colspan="${colspan}"` : ''}${rowspan ? ` rowSpan="${rowspan}"` : ''} style="border: 1px solid #000; padding: 5px; background-color: ${bg}; text-align: center; font-size: 11px;">${text}</th>`;
+
+const microTh = (bg: string, text: string) =>
+  `<th style="border: 1px solid #000; padding: 3px; background-color: ${bg}; font-size: 10px;">${text}</th>`;
+
+const tdR = (val: string, bold: boolean = false) =>
+  `<td style="border: 1px solid #000; padding: 5px; text-align: right; ${bold ? 'font-weight: bold; ' : ''}font-size: 11px;">${val}</td>`;
+
 export default function PurchaseElectricitySolarForm({
   selectedUnit,
   selectedYear,
@@ -133,7 +278,7 @@ export default function PurchaseElectricitySolarForm({
       const stored = localStorage.getItem(storageKey);
       if (stored) {
         const parsed = JSON.parse(stored);
-        
+
         if (parsed && Array.isArray(parsed.meters) && parsed.meters.length > 0) setMeters(parsed.meters);
         else setMeters([{ id: 'm1', name: 'Meter 1' }, { id: 'm2', name: 'Meter 2' }]);
 
@@ -147,7 +292,7 @@ export default function PurchaseElectricitySolarForm({
           const validatedData: FormData = {};
           MONTHS.forEach(m => {
             const rawMonth = parsed.data[m];
-            validatedData[m] = rawMonth && typeof rawMonth === 'object' 
+            validatedData[m] = rawMonth && typeof rawMonth === 'object'
               ? {
                   offPeak: rawMonth.offPeak || {},
                   peak: rawMonth.peak || {},
@@ -303,6 +448,9 @@ export default function PurchaseElectricitySolarForm({
     return MONTHS.reduce((sum, m) => sum + n(data[m]?.generators?.[meterId]), 0);
   };
 
+  /* ---------------------------------------------------------------- */
+  /*  Excel export / print HTML (unchanged output)                     */
+  /* ---------------------------------------------------------------- */
   const generateHTMLTemplate = (isPrint: boolean = false) => {
     const title = `Purchase Electricity & Solar Report`;
     const logoHtml = `<img src="/epyllion-logo.png" alt="Epyllion" style="height: 40px; margin-bottom: 10px;" onerror="this.style.display='none'" />`;
@@ -318,211 +466,67 @@ export default function PurchaseElectricitySolarForm({
       </div>
     `;
 
-    let tableHeaders = '<tr><th style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6;" rowSpan="2">Month</th>';
-    
-    if (sections.meters) {
-      tableHeaders += `<th colspan="${(meters.length * 3)}" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-weight: bold;">PURCHASE ELECTRICITY - METER READINGS (KWH)</th>`;
-    }
-    
-    if (sections.totalPurchase) {
-      const tkCols = sections.includeTK ? 1 : 0;
-      tableHeaders += `<th colspan="${3 + tkCols}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-weight: bold;">TOTAL PURCHASE ELECTRICITY (KWH)</th>`;
-    }
-
-    if (sections.solar) {
-      tableHeaders += `<th colspan="${solarMeters.length + 3}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-weight: bold;">SOLAR ELECTRICITY (KWH)</th>`;
-    }
-    if (sections.generated) {
-      tableHeaders += `<th colspan="${generators.length + 3}" style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-weight: bold;">GENERATED ELECTRICITY (KWH)</th>`;
-    }
-    if (sections.remarks) {
-      tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6; text-align: center; font-weight: bold;" rowSpan="2">REMARKS</th>`;
-    }
-    tableHeaders += '</tr><tr>';
-
-    if (sections.meters) {
-      meters.forEach(m => {
-        tableHeaders += `<th colspan="3" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-size: 11px;">${m.name}</th>`;
-      });
-    }
-
-    if (sections.totalPurchase) {
-      tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Purchase</th>`;
-      if (sections.includeTK) {
-        tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total TK (BDT)</th>`;
-      }
-      tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Domestic Use</th>`;
-      tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Production Use</th>`;
-    }
-
-    if (sections.solar) {
-      solarMeters.forEach(m => {
-        tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">${m.name}</th>`;
-      });
-      tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Total Solar</th>`;
-      tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Domestic Use (Auto)</th>`;
-      tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Production Use (Auto)</th>`;
-    }
-
-    if (sections.generated) {
-      generators.forEach(m => {
-        tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-size: 11px;">${m.name}</th>`;
-      });
-      tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-size: 11px;">Total Generated</th>`;
-      tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-size: 11px;">Domestic Use (Auto)</th>`;
-      tableHeaders += `<th style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-size: 11px;">Production Use (Auto)</th>`;
-    }
-    tableHeaders += '</tr>';
-
-    // Sub-headers row for meters (Off Peak, Peak, Flat Rate)
-    if (sections.meters) {
-      tableHeaders = tableHeaders.replace('</tr><tr>', '</tr><tr>'); // ensure structure
-      // Wait, the sub-headers need to be inside the same second `tr`. 
-      // We already added meter names with colSpan=3. Now we need a third `tr` for sub-columns? 
-      // Actually, requirement says: each meter displays its 3 sub-columns directly beneath that meter's header (colSpan=3).
-      // This means we need a THIRD row for Off Peak/Peak/Flat.
-      // Let's restructure the header logic properly.
-    }
-
-    // Let's rebuild the header rows correctly:
-    // Row 1: Section Titles
-    // Row 2: Sub-section Titles (Meter names, etc.) for sections with sub-cols, or actual column names for sections without sub-cols.
-    // Row 3: Sub-sub column names (Off Peak, Peak, Flat) for meters only.
-
-    let row1 = '<tr><th style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6;" rowSpan="3">Month</th>';
-    let row2 = '<tr>';
-    let row3 = '<tr>';
-
-    if (sections.meters) {
-      row1 += `<th colspan="${meters.length * 3}" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-weight: bold;">PURCHASE ELECTRICITY - METER READINGS (KWH)</th>`;
-      meters.forEach(m => {
-        row2 += `<th colspan="3" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-size: 11px;">${m.name}</th>`;
-      });
-      meters.forEach(() => {
-        row3 += `
-          <th style="border: 1px solid #000; padding: 3px; background-color: #fef3c7; font-size: 10px;">Off Peak</th>
-          <th style="border: 1px solid #000; padding: 3px; background-color: #fef3c7; font-size: 10px;">Peak</th>
-          <th style="border: 1px solid #000; padding: 3px; background-color: #fef3c7; font-size: 10px;">Flat Rate</th>
-        `;
-      });
-    }
-
-    if (sections.totalPurchase) {
-      const tkCols = sections.includeTK ? 1 : 0;
-      row1 += `<th colspan="${3 + tkCols}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-weight: bold;">TOTAL PURCHASE ELECTRICITY (KWH)</th>`;
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Purchase</th>`;
-      if (sections.includeTK) {
-        row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total TK (BDT)</th>`;
-      }
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Domestic Use</th>`;
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Production Use</th>`;
-    }
-
-    if (sections.solar) {
-      row1 += `<th colspan="${solarMeters.length + 3}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-weight: bold;">SOLAR ELECTRICITY (KWH)</th>`;
-      solarMeters.forEach(m => {
-        row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">${m.name}</th>`;
-      });
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Total Solar</th>`;
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Domestic Use (Auto)</th>`;
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Production Use (Auto)</th>`;
-    }
-
-    if (sections.generated) {
-      row1 += `<th colspan="${generators.length + 3}" style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-weight: bold;">GENERATED ELECTRICITY (KWH)</th>`;
-      generators.forEach(m => {
-        row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-size: 11px;">${m.name}</th>`;
-      });
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-size: 11px;">Total Generated</th>`;
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-size: 11px;">Domestic Use (Auto)</th>`;
-      row2 += `<th rowSpan="2" style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-size: 11px;">Production Use (Auto)</th>`;
-    }
-
-    if (sections.remarks) {
-      row1 += `<th style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6; text-align: center; font-weight: bold;" rowSpan="3">REMARKS</th>`;
-    }
-
-    row1 += '</tr>';
-    row2 += '</tr>';
-    row3 += '</tr>';
-
-    // If no meters section, row3 is empty and should be omitted.
-    // If meters section is active, row3 contains sub-headers.
-    // Actually, if meters section is active, we have 3 rows. If not, we have 2 rows.
-    // We need to handle rowSpan for Month correctly based on number of rows.
-    
-    // Let's simplify: Always render 3 rows. If meters are hidden, row3 will be empty. That's okay.
-    // But Month rowSpan should be 3 if meters are active, else 2? 
-    // To be safe, let's set rowSpan={sections.meters ? 3 : 2} for Month and Remarks.
-
     const monthRowSpan = sections.meters ? 3 : 2;
+    const subRowSpan = sections.meters ? 2 : 1;
 
-    row1 = `<tr><th style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6;" rowSpan="${monthRowSpan}">Month</th>`;
-
+    // Row 1: section titles
+    let row1 = `<tr><th style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6;" rowSpan="${monthRowSpan}">Month</th>`;
     if (sections.meters) {
-      row1 += `<th colspan="${meters.length * 3}" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-weight: bold;">PURCHASE ELECTRICITY - METER READINGS (KWH)</th>`;
+      row1 += bandTh('#fef3c7', 'PURCHASE ELECTRICITY - METER READINGS (KWH)', meters.length * 3);
     }
-    
     if (sections.totalPurchase) {
       const tkCols = sections.includeTK ? 1 : 0;
-      row1 += `<th colspan="${3 + tkCols}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-weight: bold;">TOTAL PURCHASE ELECTRICITY (KWH)</th>`;
+      row1 += bandTh('#d1fae5', 'TOTAL PURCHASE ELECTRICITY (KWH)', 3 + tkCols);
     }
-
     if (sections.solar) {
-      row1 += `<th colspan="${solarMeters.length + 3}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-weight: bold;">SOLAR ELECTRICITY (KWH)</th>`;
+      row1 += bandTh('#dbeafe', 'SOLAR ELECTRICITY (KWH)', solarMeters.length + 3);
     }
     if (sections.generated) {
-      row1 += `<th colspan="${generators.length + 3}" style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-weight: bold;">GENERATED ELECTRICITY (KWH)</th>`;
+      row1 += bandTh('#ffedd5', 'GENERATED ELECTRICITY (KWH)', generators.length + 3);
     }
     if (sections.remarks) {
-      row1 += `<th style="border: 1px solid #000; padding: 5px; background-color: #f3f4f6; text-align: center; font-weight: bold;" rowSpan="${monthRowSpan}">REMARKS</th>`;
+      row1 += bandTh('#f3f4f6', 'REMARKS', undefined, monthRowSpan);
     }
     row1 += '</tr>';
 
-    row2 = '<tr>';
+    // Row 2: meter names and standalone column titles
+    let row2 = '<tr>';
     if (sections.meters) {
       meters.forEach(m => {
-        row2 += `<th colspan="3" style="border: 1px solid #000; padding: 5px; background-color: #fef3c7; text-align: center; font-size: 11px;">${m.name}</th>`;
+        row2 += subTh('#fef3c7', m.name, 3);
       });
     }
-
     if (sections.totalPurchase) {
-      const tkCols = sections.includeTK ? 1 : 0;
-      row2 += `<th rowSpan="${sections.meters ? 2 : 1}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total Purchase</th>`;
+      row2 += subTh('#d1fae5', 'Total Purchase', undefined, subRowSpan);
       if (sections.includeTK) {
-        row2 += `<th rowSpan="${sections.meters ? 2 : 1}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Total TK (BDT)</th>`;
+        row2 += subTh('#d1fae5', 'Total TK (BDT)', undefined, subRowSpan);
       }
-      row2 += `<th rowSpan="${sections.meters ? 2 : 1}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Domestic Use</th>`;
-      row2 += `<th rowSpan="${sections.meters ? 2 : 1}" style="border: 1px solid #000; padding: 5px; background-color: #d1fae5; text-align: center; font-size: 11px;">Production Use</th>`;
+      row2 += subTh('#d1fae5', 'Domestic Use', undefined, subRowSpan);
+      row2 += subTh('#d1fae5', 'Production Use', undefined, subRowSpan);
     }
-
     if (sections.solar) {
       solarMeters.forEach(m => {
-        row2 += `<th rowSpan="${sections.meters ? 2 : 1}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">${m.name}</th>`;
+        row2 += subTh('#dbeafe', m.name, undefined, subRowSpan);
       });
-      row2 += `<th rowSpan="${sections.meters ? 2 : 1}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Total Solar</th>`;
-      row2 += `<th rowSpan="${sections.meters ? 2 : 1}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Domestic Use (Auto)</th>`;
-      row2 += `<th rowSpan="${sections.meters ? 2 : 1}" style="border: 1px solid #000; padding: 5px; background-color: #dbeafe; text-align: center; font-size: 11px;">Production Use (Auto)</th>`;
+      row2 += subTh('#dbeafe', 'Total Solar', undefined, subRowSpan);
+      row2 += subTh('#dbeafe', 'Domestic Use (Auto)', undefined, subRowSpan);
+      row2 += subTh('#dbeafe', 'Production Use (Auto)', undefined, subRowSpan);
     }
-
     if (sections.generated) {
       generators.forEach(m => {
-        row2 += `<th rowSpan="${sections.meters ? 2 : 1}" style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-size: 11px;">${m.name}</th>`;
+        row2 += subTh('#ffedd5', m.name, undefined, subRowSpan);
       });
-      row2 += `<th rowSpan="${sections.meters ? 2 : 1}" style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-size: 11px;">Total Generated</th>`;
-      row2 += `<th rowSpan="${sections.meters ? 2 : 1}" style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-size: 11px;">Domestic Use (Auto)</th>`;
-      row2 += `<th rowSpan="${sections.meters ? 2 : 1}" style="border: 1px solid #000; padding: 5px; background-color: #ffedd5; text-align: center; font-size: 11px;">Production Use (Auto)</th>`;
+      row2 += subTh('#ffedd5', 'Total Generated', undefined, subRowSpan);
+      row2 += subTh('#ffedd5', 'Domestic Use (Auto)', undefined, subRowSpan);
+      row2 += subTh('#ffedd5', 'Production Use (Auto)', undefined, subRowSpan);
     }
     row2 += '</tr>';
 
-    row3 = '<tr>';
+    // Row 3: Off Peak / Peak / Flat Rate under each meter
+    let row3 = '<tr>';
     if (sections.meters) {
       meters.forEach(() => {
-        row3 += `
-          <th style="border: 1px solid #000; padding: 3px; background-color: #fef3c7; font-size: 10px;">Off Peak</th>
-          <th style="border: 1px solid #000; padding: 3px; background-color: #fef3c7; font-size: 10px;">Peak</th>
-          <th style="border: 1px solid #000; padding: 3px; background-color: #fef3c7; font-size: 10px;">Flat Rate</th>
-        `;
+        row3 += microTh('#fef3c7', 'Off Peak') + microTh('#fef3c7', 'Peak') + microTh('#fef3c7', 'Flat Rate');
       });
     }
     row3 += '</tr>';
@@ -533,48 +537,40 @@ export default function PurchaseElectricitySolarForm({
     MONTHS.forEach(m => {
       const row = data[m] || getEmptyMonth();
       tbody += `<tr><td style="border: 1px solid #000; padding: 5px; font-weight: bold; font-size: 11px;">${m}</td>`;
-      
+
       if (sections.meters) {
         meters.forEach(meter => {
-          tbody += `
-            <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.offPeak?.[meter.id] || ''}</td>
-            <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.peak?.[meter.id] || ''}</td>
-            <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.flat?.[meter.id] || ''}</td>
-          `;
+          tbody += tdR(row.offPeak?.[meter.id] || '');
+          tbody += tdR(row.peak?.[meter.id] || '');
+          tbody += tdR(row.flat?.[meter.id] || '');
         });
       }
 
       if (sections.totalPurchase) {
-        tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getPurchaseTotal(row))}</td>`;
+        tbody += tdR(fmt(getPurchaseTotal(row)), true);
         if (sections.includeTK) {
-          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.totalTK || ''}</td>`;
+          tbody += tdR(row.totalTK || '');
         }
-        tbody += `
-          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.purchaseDomestic || ''}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.purchaseProduction || ''}</td>
-        `;
+        tbody += tdR(row.purchaseDomestic || '');
+        tbody += tdR(row.purchaseProduction || '');
       }
 
       if (sections.solar) {
         solarMeters.forEach(meter => {
-          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.solar?.[meter.id] || ''}</td>`;
+          tbody += tdR(row.solar?.[meter.id] || '');
         });
-        tbody += `
-          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getSolarTotal(row))}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getSolarAllocation(row, 'domestic'))}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getSolarAllocation(row, 'production'))}</td>
-        `;
+        tbody += tdR(fmt(getSolarTotal(row)), true);
+        tbody += tdR(fmt(getSolarAllocation(row, 'domestic')));
+        tbody += tdR(fmt(getSolarAllocation(row, 'production')));
       }
 
       if (sections.generated) {
         generators.forEach(meter => {
-          tbody += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${row.generators?.[meter.id] || ''}</td>`;
+          tbody += tdR(row.generators?.[meter.id] || '');
         });
-        tbody += `
-          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-weight: bold; font-size: 11px;">${fmt(getGeneratedTotal(row))}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getGeneratedAllocation(row, 'domestic'))}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getGeneratedAllocation(row, 'production'))}</td>
-        `;
+        tbody += tdR(fmt(getGeneratedTotal(row)), true);
+        tbody += tdR(fmt(getGeneratedAllocation(row, 'domestic')));
+        tbody += tdR(fmt(getGeneratedAllocation(row, 'production')));
       }
 
       if (sections.remarks) {
@@ -584,48 +580,40 @@ export default function PurchaseElectricitySolarForm({
     });
 
     let tfoot = '<tr style="background-color: #f3f4f6; font-weight: bold;"><td style="border: 1px solid #000; padding: 5px; font-size: 11px;">Total</td>';
-    
+
     if (sections.meters) {
       meters.forEach(meter => {
-        tfoot += `
-          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getMeterYearlyTotal(meter.id, 'offPeak'))}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getMeterYearlyTotal(meter.id, 'peak'))}</td>
-          <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getMeterYearlyTotal(meter.id, 'flat'))}</td>
-        `;
+        tfoot += tdR(fmt(getMeterYearlyTotal(meter.id, 'offPeak')));
+        tfoot += tdR(fmt(getMeterYearlyTotal(meter.id, 'peak')));
+        tfoot += tdR(fmt(getMeterYearlyTotal(meter.id, 'flat')));
       });
     }
 
     if (sections.totalPurchase) {
-      tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum('purchaseTotal'))}</td>`;
+      tfoot += tdR(fmt(getYearlySum('purchaseTotal')));
       if (sections.includeTK) {
-        tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum('totalTK'))}</td>`;
+        tfoot += tdR(fmt(getYearlySum('totalTK')));
       }
-      tfoot += `
-        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum('purchaseDomestic'))}</td>
-        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum('purchaseProduction'))}</td>
-      `;
+      tfoot += tdR(fmt(getYearlySum('purchaseDomestic')));
+      tfoot += tdR(fmt(getYearlySum('purchaseProduction')));
     }
 
     if (sections.solar) {
       solarMeters.forEach(meter => {
-        tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getSolarMeterYearlyTotal(meter.id))}</td>`;
+        tfoot += tdR(fmt(getSolarMeterYearlyTotal(meter.id)));
       });
-      tfoot += `
-        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum('solarTotal'))}</td>
-        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum('solarDomestic'))}</td>
-        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum('solarProduction'))}</td>
-      `;
+      tfoot += tdR(fmt(getYearlySum('solarTotal')));
+      tfoot += tdR(fmt(getYearlySum('solarDomestic')));
+      tfoot += tdR(fmt(getYearlySum('solarProduction')));
     }
 
     if (sections.generated) {
       generators.forEach(meter => {
-        tfoot += `<td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getGenMeterYearlyTotal(meter.id))}</td>`;
+        tfoot += tdR(fmt(getGenMeterYearlyTotal(meter.id)));
       });
-      tfoot += `
-        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum('genTotal'))}</td>
-        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum('genDomestic'))}</td>
-        <td style="border: 1px solid #000; padding: 5px; text-align: right; font-size: 11px;">${fmt(getYearlySum('genProduction'))}</td>
-      `;
+      tfoot += tdR(fmt(getYearlySum('genTotal')));
+      tfoot += tdR(fmt(getYearlySum('genDomestic')));
+      tfoot += tdR(fmt(getYearlySum('genProduction')));
     }
 
     if (sections.remarks) {
@@ -710,10 +698,51 @@ export default function PurchaseElectricitySolarForm({
     setSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  /* ---------------------------------------------------------------- */
+  /*  On-screen UI                                                     */
+  /* ---------------------------------------------------------------- */
   const monthRowSpan = sections.meters ? 3 : 2;
+  const subRowSpan = sections.meters ? 2 : 1;
+
+  const A = THEMES.amber;
+  const E = THEMES.emerald;
+  const S = THEMES.sky;
+  const O = THEMES.orange;
+  const L = THEMES.slate;
+
+  const bandBase = 'px-3 py-2 text-center font-bold uppercase tracking-wide text-xs border-b border-r';
+  const subBase = 'px-2 py-2 text-center whitespace-nowrap text-xs font-semibold border-b border-r';
+
+  const renderAddButton = (type: 'meters' | 'solarMeters' | 'generators', label: string, theme: Theme) => {
+    if (isViewer) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => addMeter(type)}
+        className={`no-print inline-flex items-center gap-1 px-2.5 py-1 rounded-md border text-[11px] font-semibold normal-case tracking-normal shadow-sm transition ${theme.addBtn}`}
+      >
+        <Plus size={12} /> {label}
+      </button>
+    );
+  };
+
+  const renderRemoveButton = (type: 'meters' | 'solarMeters' | 'generators', id: string, count: number) => {
+    if (isViewer || count <= 1) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => removeMeter(type, id)}
+        title="Remove"
+        className="no-print shrink-0 inline-flex items-center justify-center w-5 h-5 rounded bg-white border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-700 transition"
+      >
+        <X size={12} />
+      </button>
+    );
+  };
 
   return (
-    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm">
+    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm border border-slate-200">
+      {/* Header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Purchase Electricity &amp; Solar</h1>
@@ -724,7 +753,7 @@ export default function PurchaseElectricitySolarForm({
             </span>
           </div>
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-2">
           {!isViewer && (
             <button
@@ -756,9 +785,10 @@ export default function PurchaseElectricitySolarForm({
         </div>
       </div>
 
-      <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-4 text-sm no-print">
+      {/* Section filters */}
+      <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm no-print">
         <span className="font-semibold text-slate-700 mr-2">Report Columns / Sections to Export &amp; Print:</span>
-        
+
         <label className="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" checked={sections.meters} onChange={() => toggleSection('meters')} className="accent-amber-600 w-4 h-4" />
           <span>Meter Readings (Purchase)</span>
@@ -772,7 +802,7 @@ export default function PurchaseElectricitySolarForm({
           <span className={!sections.totalPurchase ? 'text-slate-400' : ''}>Include Total TK (BDT)</span>
         </label>
         <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.solar} onChange={() => toggleSection('solar')} className="accent-blue-600 w-4 h-4" />
+          <input type="checkbox" checked={sections.solar} onChange={() => toggleSection('solar')} className="accent-sky-600 w-4 h-4" />
           <span>Solar Electricity (kWh)</span>
         </label>
         <label className="flex items-center gap-1.5 cursor-pointer">
@@ -780,7 +810,7 @@ export default function PurchaseElectricitySolarForm({
           <span>Generated Electricity (kWh)</span>
         </label>
         <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.remarks} onChange={() => toggleSection('remarks')} className="accent-gray-600 w-4 h-4" />
+          <input type="checkbox" checked={sections.remarks} onChange={() => toggleSection('remarks')} className="accent-slate-600 w-4 h-4" />
           <span>Remarks</span>
         </label>
       </div>
@@ -791,157 +821,169 @@ export default function PurchaseElectricitySolarForm({
         </div>
       )}
 
-      <div className="overflow-x-auto border border-slate-200 rounded-lg">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-600 font-semibold">
+      {/* Table */}
+      <div className="overflow-x-auto border border-slate-300 rounded-xl shadow-sm">
+        <table className="w-full text-sm text-left border-separate border-spacing-0">
+          <thead>
+            {/* Row 1 — section bands */}
             <tr>
-              <th className="px-2 py-2 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 w-24 text-center" rowSpan={monthRowSpan}>Month</th>
-              
+              <th
+                className={`sticky left-0 z-30 w-28 min-w-[112px] px-2 py-2 text-center text-xs font-bold border-b border-r border-slate-300 ${L.band}`}
+                rowSpan={monthRowSpan}
+              >
+                Month
+              </th>
+
               {sections.meters && (
-                <th colSpan={meters.length * 3} className="px-2 py-2 bg-amber-100 text-amber-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Purchase Electricity - Meter Readings (kWh)
+                <th colSpan={meters.length * 3} className={`${bandBase} ${A.band} ${A.border}`}>
+                  <div className="flex items-center justify-center gap-3 flex-wrap">
+                    <span>Purchase Electricity - Meter Readings (kWh)</span>
+                    {renderAddButton('meters', 'Add Meter', A)}
+                  </div>
                 </th>
               )}
-              
+
               {sections.totalPurchase && (
-                <th colSpan={3 + (sections.includeTK ? 1 : 0)} className="px-2 py-2 bg-emerald-100 text-emerald-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
+                <th colSpan={3 + (sections.includeTK ? 1 : 0)} className={`${bandBase} ${E.band} ${E.border}`}>
                   Total Purchase Electricity (kWh)
                 </th>
               )}
 
               {sections.solar && (
-                <th colSpan={solarMeters.length + 3} className="px-2 py-2 bg-blue-100 text-blue-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Solar Electricity (kWh)
+                <th colSpan={solarMeters.length + 3} className={`${bandBase} ${S.band} ${S.border}`}>
+                  <div className="flex items-center justify-center gap-3 flex-wrap">
+                    <span>Solar Electricity (kWh)</span>
+                    {renderAddButton('solarMeters', 'Add Solar Meter', S)}
+                  </div>
                 </th>
               )}
+
               {sections.generated && (
-                <th colSpan={generators.length + 3} className="px-2 py-2 bg-orange-100 text-orange-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Generated Electricity (kWh)
+                <th colSpan={generators.length + 3} className={`${bandBase} ${O.band} ${O.border}`}>
+                  <div className="flex items-center justify-center gap-3 flex-wrap">
+                    <span>Generated Electricity (kWh)</span>
+                    {renderAddButton('generators', 'Add Generator', O)}
+                  </div>
                 </th>
               )}
+
               {sections.remarks && (
-                <th className="px-2 py-2 bg-gray-100 text-gray-900 text-center font-bold uppercase tracking-wider" rowSpan={monthRowSpan}>
+                <th className={`${bandBase} border-r-0 ${L.band} ${L.border}`} rowSpan={monthRowSpan}>
                   Remarks
                 </th>
               )}
             </tr>
-            
+
+            {/* Row 2 — meter names / column titles */}
             <tr>
               {sections.meters && (
                 <>
                   {meters.map((m) => (
-                    <React.Fragment key={m.id}>
-                      <th colSpan={3} className="px-2 py-1 text-center bg-amber-50 min-w-[120px]">
-                        <div className="flex items-center justify-between gap-1 mb-1">
-                          <input
-                            type="text"
-                            value={m.name}
-                            onChange={(e) => updateMeterName('meters', m.id, e.target.value)}
-                            disabled={isViewer}
-                            className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-amber-500 disabled:bg-transparent disabled:border-transparent"
-                          />
-                          {!isViewer && meters.length > 1 && (
-                            <button onClick={() => removeMeter('meters', m.id)} className="text-red-500 hover:text-red-700 no-print">
-                              <X size={12} />
-                            </button>
-                          )}
-                        </div>
-                      </th>
-                    </React.Fragment>
+                    <th key={m.id} colSpan={3} className={`px-2 py-2 min-w-[150px] border-b border-r ${A.sub} ${A.border}`}>
+                      <div className="flex items-center gap-1.5">
+                        <NameInput
+                          value={m.name}
+                          onChange={(v) => updateMeterName('meters', m.id, v)}
+                          disabled={isViewer}
+                          theme={A}
+                        />
+                        {renderRemoveButton('meters', m.id, meters.length)}
+                      </div>
+                    </th>
                   ))}
                 </>
               )}
 
               {sections.totalPurchase && (
                 <>
-                  <th rowSpan={sections.meters ? 2 : 1} className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Total Purchase</th>
+                  <th rowSpan={subRowSpan} className={`${subBase} ${E.sub} ${E.border}`}>Total Purchase</th>
                   {sections.includeTK && (
-                    <th rowSpan={sections.meters ? 2 : 1} className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total TK (BDT)</th>
+                    <th rowSpan={subRowSpan} className={`${subBase} ${E.sub} ${E.border}`}>Total TK (BDT)</th>
                   )}
-                  <th rowSpan={sections.meters ? 2 : 1} className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Domestic Use</th>
-                  <th rowSpan={sections.meters ? 2 : 1} className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-r border-slate-200">Production Use</th>
+                  <th rowSpan={subRowSpan} className={`${subBase} ${E.sub} ${E.border}`}>Domestic Use</th>
+                  <th rowSpan={subRowSpan} className={`${subBase} ${E.sub} ${E.border}`}>Production Use</th>
                 </>
               )}
 
               {sections.solar && (
                 <>
                   {solarMeters.map((m) => (
-                    <th key={m.id} rowSpan={sections.meters ? 2 : 1} className="px-2 py-1 text-center bg-blue-50 min-w-[100px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <input
-                          type="text"
+                    <th key={m.id} rowSpan={subRowSpan} className={`px-2 py-2 min-w-[130px] border-b border-r ${S.sub} ${S.border}`}>
+                      <div className="flex items-center gap-1.5">
+                        <NameInput
                           value={m.name}
-                          onChange={(e) => updateMeterName('solarMeters', m.id, e.target.value)}
+                          onChange={(v) => updateMeterName('solarMeters', m.id, v)}
                           disabled={isViewer}
-                          className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-blue-500 disabled:bg-transparent disabled:border-transparent"
+                          theme={S}
                         />
-                        {!isViewer && solarMeters.length > 1 && (
-                          <button onClick={() => removeMeter('solarMeters', m.id)} className="text-red-500 hover:text-red-700 no-print">
-                            <X size={12} />
-                          </button>
-                        )}
+                        {renderRemoveButton('solarMeters', m.id, solarMeters.length)}
                       </div>
                     </th>
                   ))}
-                  <th rowSpan={sections.meters ? 2 : 1} className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50 border-l border-slate-200">Total Solar</th>
-                  <th rowSpan={sections.meters ? 2 : 1} className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50">Domestic Use (Auto)</th>
-                  <th rowSpan={sections.meters ? 2 : 1} className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50 border-r border-slate-200">Production Use (Auto)</th>
+                  <th rowSpan={subRowSpan} className={`${subBase} ${S.sub} ${S.border}`}>Total Solar</th>
+                  <th rowSpan={subRowSpan} className={`${subBase} ${S.sub} ${S.border}`}>Domestic Use (Auto)</th>
+                  <th rowSpan={subRowSpan} className={`${subBase} ${S.sub} ${S.border}`}>Production Use (Auto)</th>
                 </>
               )}
 
               {sections.generated && (
                 <>
                   {generators.map((m) => (
-                    <th key={m.id} rowSpan={sections.meters ? 2 : 1} className="px-2 py-1 text-center bg-orange-50 min-w-[100px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <input
-                          type="text"
+                    <th key={m.id} rowSpan={subRowSpan} className={`px-2 py-2 min-w-[130px] border-b border-r ${O.sub} ${O.border}`}>
+                      <div className="flex items-center gap-1.5">
+                        <NameInput
                           value={m.name}
-                          onChange={(e) => updateMeterName('generators', m.id, e.target.value)}
+                          onChange={(v) => updateMeterName('generators', m.id, v)}
                           disabled={isViewer}
-                          className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-orange-500 disabled:bg-transparent disabled:border-transparent"
+                          theme={O}
                         />
-                        {!isViewer && generators.length > 1 && (
-                          <button onClick={() => removeMeter('generators', m.id)} className="text-red-500 hover:text-red-700 no-print">
-                            <X size={12} />
-                          </button>
-                        )}
+                        {renderRemoveButton('generators', m.id, generators.length)}
                       </div>
                     </th>
                   ))}
-                  <th rowSpan={sections.meters ? 2 : 1} className="px-2 py-2 text-center whitespace-nowrap bg-orange-50/50 border-l border-slate-200">Total Generated</th>
-                  <th rowSpan={sections.meters ? 2 : 1} className="px-2 py-2 text-center whitespace-nowrap bg-orange-50/50">Domestic Use (Auto)</th>
-                  <th rowSpan={sections.meters ? 2 : 1} className="px-2 py-2 text-center whitespace-nowrap bg-orange-50/50 border-r border-slate-200">Production Use (Auto)</th>
+                  <th rowSpan={subRowSpan} className={`${subBase} ${O.sub} ${O.border}`}>Total Generated</th>
+                  <th rowSpan={subRowSpan} className={`${subBase} ${O.sub} ${O.border}`}>Domestic Use (Auto)</th>
+                  <th rowSpan={subRowSpan} className={`${subBase} ${O.sub} ${O.border}`}>Production Use (Auto)</th>
                 </>
               )}
             </tr>
-            
+
+            {/* Row 3 — Off Peak / Peak / Flat Rate */}
             {sections.meters && (
               <tr>
                 {meters.map((m) => (
                   <React.Fragment key={`sub-${m.id}`}>
-                    <th className="px-1 py-1 text-center text-[10px] bg-amber-50/30 border-l border-slate-200">Off Peak</th>
-                    <th className="px-1 py-1 text-center text-[10px] bg-amber-50/30">Peak</th>
-                    <th className="px-1 py-1 text-center text-[10px] bg-amber-50/30">Flat Rate</th>
+                    <th className={`px-1 py-1 text-center text-[10px] font-semibold border-b border-r ${A.micro} ${A.border}`}>Off Peak</th>
+                    <th className={`px-1 py-1 text-center text-[10px] font-semibold border-b border-r ${A.micro} ${A.border}`}>Peak</th>
+                    <th className={`px-1 py-1 text-center text-[10px] font-semibold border-b border-r ${A.micro} ${A.border}`}>Flat Rate</th>
                   </React.Fragment>
                 ))}
               </tr>
             )}
           </thead>
-          <tbody className="divide-y divide-slate-100">
-            {MONTHS.map((month, idx) => {
+
+          <tbody>
+            {MONTHS.map((month) => {
               const row = data[month] || getEmptyMonth();
               return (
-                <tr key={month} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                  <td className="px-2 py-1 font-semibold text-slate-700 sticky left-0 bg-inherit z-10 border-r border-slate-200">{month}</td>
-                  
+                <tr key={month}>
+                  <td className="sticky left-0 z-10 px-3 py-1.5 font-semibold text-slate-800 bg-slate-100 border-b border-r border-slate-300 whitespace-nowrap">
+                    {month}
+                  </td>
+
                   {sections.meters && (
                     <>
                       {meters.map(m => (
                         <React.Fragment key={`row-${month}-${m.id}`}>
-                          <td className="px-1 py-1 border-l border-slate-200"><input type="text" inputMode="decimal" value={row.offPeak?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'offPeak', m.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                          <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.peak?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'peak', m.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                          <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.flat?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'flat', m.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
+                          <td className={`px-1.5 py-1.5 border-b border-r ${A.tint} ${A.border}`}>
+                            <CellInput width="w-20" theme={A} disabled={isViewer} value={row.offPeak?.[m.id] || ''} onChange={(v) => updateNestedQty(month, 'offPeak', m.id, v)} />
+                          </td>
+                          <td className={`px-1.5 py-1.5 border-b border-r ${A.tint} ${A.border}`}>
+                            <CellInput width="w-20" theme={A} disabled={isViewer} value={row.peak?.[m.id] || ''} onChange={(v) => updateNestedQty(month, 'peak', m.id, v)} />
+                          </td>
+                          <td className={`px-1.5 py-1.5 border-b border-r ${A.tint} ${A.border}`}>
+                            <CellInput width="w-20" theme={A} disabled={isViewer} value={row.flat?.[m.id] || ''} onChange={(v) => updateNestedQty(month, 'flat', m.id, v)} />
+                          </td>
                         </React.Fragment>
                       ))}
                     </>
@@ -949,61 +991,92 @@ export default function PurchaseElectricitySolarForm({
 
                   {sections.totalPurchase && (
                     <>
-                      <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30 border-l border-slate-200">{fmt(getPurchaseTotal(row))}</td>
+                      <td title="Auto-calculated" className={`px-3 py-1.5 text-right font-bold border-b border-r ${E.lockedStrong} ${E.border}`}>
+                        {fmt(getPurchaseTotal(row))}
+                      </td>
                       {sections.includeTK && (
-                        <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.totalTK} onChange={(e) => updateMonthField(month, 'totalTK', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
+                        <td className={`px-1.5 py-1.5 border-b border-r ${E.tint} ${E.border}`}>
+                          <CellInput width="w-24" theme={E} disabled={isViewer} value={row.totalTK} onChange={(v) => updateMonthField(month, 'totalTK', v)} />
+                        </td>
                       )}
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.purchaseDomestic} onChange={(e) => updateMonthField(month, 'purchaseDomestic', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-1 py-1 border-r border-slate-200"><input type="text" inputMode="decimal" value={row.purchaseProduction} onChange={(e) => updateMonthField(month, 'purchaseProduction', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
+                      <td className={`px-1.5 py-1.5 border-b border-r ${E.tint} ${E.border}`}>
+                        <CellInput width="w-24" theme={E} disabled={isViewer} value={row.purchaseDomestic} onChange={(v) => updateMonthField(month, 'purchaseDomestic', v)} />
+                      </td>
+                      <td className={`px-1.5 py-1.5 border-b border-r ${E.tint} ${E.border}`}>
+                        <CellInput width="w-24" theme={E} disabled={isViewer} value={row.purchaseProduction} onChange={(v) => updateMonthField(month, 'purchaseProduction', v)} />
+                      </td>
                     </>
                   )}
 
                   {sections.solar && (
                     <>
                       {solarMeters.map(m => (
-                        <td key={`row-${month}-${m.id}`} className="px-1 py-1">
-                          <input type="text" inputMode="decimal" value={row.solar?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'solar', m.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                        <td key={`row-${month}-${m.id}`} className={`px-1.5 py-1.5 border-b border-r ${S.tint} ${S.border}`}>
+                          <CellInput width="w-24" theme={S} disabled={isViewer} value={row.solar?.[m.id] || ''} onChange={(v) => updateNestedQty(month, 'solar', m.id, v)} />
                         </td>
                       ))}
-                      <td className="px-2 py-1 text-right font-bold text-blue-700 bg-blue-50/30 border-l border-slate-200">{fmt(getSolarTotal(row))}</td>
-                      <td className="px-2 py-1 text-right text-blue-700 bg-blue-50/10">{fmt(getSolarAllocation(row, 'domestic'))}</td>
-                      <td className="px-2 py-1 text-right text-blue-700 bg-blue-50/10 border-r border-slate-200">{fmt(getSolarAllocation(row, 'production'))}</td>
+                      <td title="Auto-calculated" className={`px-3 py-1.5 text-right font-bold border-b border-r ${S.lockedStrong} ${S.border}`}>
+                        {fmt(getSolarTotal(row))}
+                      </td>
+                      <td title="Auto-calculated from Domestic/Production ratio" className={`px-3 py-1.5 text-right font-bold border-b border-r ${S.locked} ${S.border}`}>
+                        {fmt(getSolarAllocation(row, 'domestic'))}
+                      </td>
+                      <td title="Auto-calculated from Domestic/Production ratio" className={`px-3 py-1.5 text-right font-bold border-b border-r ${S.locked} ${S.border}`}>
+                        {fmt(getSolarAllocation(row, 'production'))}
+                      </td>
                     </>
                   )}
 
                   {sections.generated && (
                     <>
                       {generators.map(m => (
-                        <td key={`row-${month}-${m.id}`} className="px-1 py-1">
-                          <input type="text" inputMode="decimal" value={row.generators?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'generators', m.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                        <td key={`row-${month}-${m.id}`} className={`px-1.5 py-1.5 border-b border-r ${O.tint} ${O.border}`}>
+                          <CellInput width="w-24" theme={O} disabled={isViewer} value={row.generators?.[m.id] || ''} onChange={(v) => updateNestedQty(month, 'generators', m.id, v)} />
                         </td>
                       ))}
-                      <td className="px-2 py-1 text-right font-bold text-orange-700 bg-orange-50/30 border-l border-slate-200">{fmt(getGeneratedTotal(row))}</td>
-                      <td className="px-2 py-1 text-right text-orange-700 bg-orange-50/10">{fmt(getGeneratedAllocation(row, 'domestic'))}</td>
-                      <td className="px-2 py-1 text-right text-orange-700 bg-orange-50/10 border-r border-slate-200">{fmt(getGeneratedAllocation(row, 'production'))}</td>
+                      <td title="Auto-calculated" className={`px-3 py-1.5 text-right font-bold border-b border-r ${O.lockedStrong} ${O.border}`}>
+                        {fmt(getGeneratedTotal(row))}
+                      </td>
+                      <td title="Auto-calculated from Domestic/Production ratio" className={`px-3 py-1.5 text-right font-bold border-b border-r ${O.locked} ${O.border}`}>
+                        {fmt(getGeneratedAllocation(row, 'domestic'))}
+                      </td>
+                      <td title="Auto-calculated from Domestic/Production ratio" className={`px-3 py-1.5 text-right font-bold border-b border-r ${O.locked} ${O.border}`}>
+                        {fmt(getGeneratedAllocation(row, 'production'))}
+                      </td>
                     </>
                   )}
 
                   {sections.remarks && (
-                    <td className="px-1 py-1">
-                      <input type="text" value={row.remarks} onChange={(e) => updateMonthField(month, 'remarks', e.target.value)} disabled={isViewer} className="w-full min-w-[120px] px-2 py-1 border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" placeholder="Notes..." />
+                    <td className={`px-1.5 py-1.5 border-b ${L.tint} ${L.border}`}>
+                      <CellInput
+                        width="w-full min-w-[160px]"
+                        align="left"
+                        theme={L}
+                        disabled={isViewer}
+                        value={row.remarks}
+                        onChange={(v) => updateMonthField(month, 'remarks', v)}
+                        placeholder="Notes..."
+                      />
                     </td>
                   )}
                 </tr>
               );
             })}
           </tbody>
-          <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-bold text-xs">
-            <tr>
-              <td className="px-2 py-2 sticky left-0 bg-slate-100 z-10 border-r border-slate-300">Total</td>
-              
+
+          <tfoot>
+            <tr className="font-bold text-xs">
+              <td className="sticky left-0 z-10 px-3 py-2.5 bg-slate-300 text-slate-900 border-t-2 border-r border-slate-500">
+                Total
+              </td>
+
               {sections.meters && (
                 <>
                   {meters.map(m => (
                     <React.Fragment key={`tot-${m.id}`}>
-                      <td className="px-1 py-2 text-right border-l border-slate-200">{fmt(getMeterYearlyTotal(m.id, 'offPeak'))}</td>
-                      <td className="px-1 py-2 text-right">{fmt(getMeterYearlyTotal(m.id, 'peak'))}</td>
-                      <td className="px-1 py-2 text-right">{fmt(getMeterYearlyTotal(m.id, 'flat'))}</td>
+                      <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-amber-500 ${A.foot} ${A.border}`}>{fmt(getMeterYearlyTotal(m.id, 'offPeak'))}</td>
+                      <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-amber-500 ${A.foot} ${A.border}`}>{fmt(getMeterYearlyTotal(m.id, 'peak'))}</td>
+                      <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-amber-500 ${A.foot} ${A.border}`}>{fmt(getMeterYearlyTotal(m.id, 'flat'))}</td>
                     </React.Fragment>
                   ))}
                 </>
@@ -1011,64 +1084,44 @@ export default function PurchaseElectricitySolarForm({
 
               {sections.totalPurchase && (
                 <>
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50 border-l border-slate-200">{fmt(getYearlySum('purchaseTotal'))}</td>
+                  <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-emerald-500 ${E.foot} ${E.border}`}>{fmt(getYearlySum('purchaseTotal'))}</td>
                   {sections.includeTK && (
-                    <td className="px-2 py-2 text-right text-emerald-800">{fmt(getYearlySum('totalTK'))}</td>
+                    <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-emerald-500 ${E.foot} ${E.border}`}>{fmt(getYearlySum('totalTK'))}</td>
                   )}
-                  <td className="px-2 py-2 text-right text-emerald-800">{fmt(getYearlySum('purchaseDomestic'))}</td>
-                  <td className="px-2 py-2 text-right text-emerald-800 border-r border-slate-300">{fmt(getYearlySum('purchaseProduction'))}</td>
+                  <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-emerald-500 ${E.foot} ${E.border}`}>{fmt(getYearlySum('purchaseDomestic'))}</td>
+                  <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-emerald-500 ${E.foot} ${E.border}`}>{fmt(getYearlySum('purchaseProduction'))}</td>
                 </>
               )}
 
               {sections.solar && (
                 <>
                   {solarMeters.map(m => (
-                    <td key={`tot-${m.id}`} className="px-2 py-2 text-right text-blue-800">{fmt(getSolarMeterYearlyTotal(m.id))}</td>
+                    <td key={`tot-${m.id}`} className={`px-3 py-2.5 text-right border-t-2 border-r border-t-sky-500 ${S.foot} ${S.border}`}>{fmt(getSolarMeterYearlyTotal(m.id))}</td>
                   ))}
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50 border-l border-slate-200">{fmt(getYearlySum('solarTotal'))}</td>
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50">{fmt(getYearlySum('solarDomestic'))}</td>
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50 border-r border-slate-300">{fmt(getYearlySum('solarProduction'))}</td>
+                  <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-sky-500 ${S.foot} ${S.border}`}>{fmt(getYearlySum('solarTotal'))}</td>
+                  <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-sky-500 ${S.foot} ${S.border}`}>{fmt(getYearlySum('solarDomestic'))}</td>
+                  <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-sky-500 ${S.foot} ${S.border}`}>{fmt(getYearlySum('solarProduction'))}</td>
                 </>
               )}
 
               {sections.generated && (
                 <>
                   {generators.map(m => (
-                    <td key={`tot-${m.id}`} className="px-2 py-2 text-right text-orange-800">{fmt(getGenMeterYearlyTotal(m.id))}</td>
+                    <td key={`tot-${m.id}`} className={`px-3 py-2.5 text-right border-t-2 border-r border-t-orange-500 ${O.foot} ${O.border}`}>{fmt(getGenMeterYearlyTotal(m.id))}</td>
                   ))}
-                  <td className="px-2 py-2 text-right text-orange-800 bg-orange-100/50 border-l border-slate-200">{fmt(getYearlySum('genTotal'))}</td>
-                  <td className="px-2 py-2 text-right text-orange-800 bg-orange-100/50">{fmt(getYearlySum('genDomestic'))}</td>
-                  <td className="px-2 py-2 text-right text-orange-800 bg-orange-100/50 border-r border-slate-300">{fmt(getYearlySum('genProduction'))}</td>
+                  <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-orange-500 ${O.foot} ${O.border}`}>{fmt(getYearlySum('genTotal'))}</td>
+                  <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-orange-500 ${O.foot} ${O.border}`}>{fmt(getYearlySum('genDomestic'))}</td>
+                  <td className={`px-3 py-2.5 text-right border-t-2 border-r border-t-orange-500 ${O.foot} ${O.border}`}>{fmt(getYearlySum('genProduction'))}</td>
                 </>
               )}
 
               {sections.remarks && (
-                <td className="px-2 py-2 text-right text-slate-400">-</td>
+                <td className={`px-3 py-2.5 text-center border-t-2 border-t-slate-500 ${L.foot}`}>-</td>
               )}
             </tr>
           </tfoot>
         </table>
       </div>
-
-      {!isViewer && (
-        <div className="mt-4 flex flex-wrap gap-3 no-print">
-          {sections.meters && (
-            <button onClick={() => addMeter('meters')} className="flex items-center gap-2 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-sm font-semibold transition-colors">
-              <Plus size={16} /> Add Meter
-            </button>
-          )}
-          {sections.solar && (
-            <button onClick={() => addMeter('solarMeters')} className="flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-sm font-semibold transition-colors">
-              <Plus size={16} /> Add Solar Meter
-            </button>
-          )}
-          {sections.generated && (
-            <button onClick={() => addMeter('generators')} className="flex items-center gap-2 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-sm font-semibold transition-colors">
-              <Plus size={16} /> Add Generator
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
