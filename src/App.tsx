@@ -838,7 +838,7 @@ const App: React.FC = () => {
     );
   };
 
-  const ghg = useMemo(() => {
+  const ghg = useMemo<any>(() => {
     const totalPEkWh = energyRows.reduce((s, r) => s + rowTotalPE(r), 0);
     const totalSolar = energyRows.reduce((s, r) => s + n(r.solar_meter1_kwh) + n(r.solar_meter2_kwh), 0);
     const totalNGm3 = energyRows.reduce((s, r) => s + rowTotalNG(r), 0);
