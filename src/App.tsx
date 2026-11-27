@@ -937,7 +937,7 @@ const App: React.FC = () => {
 
   // ---------- DASHBOARD: live KPI values ----------
   // Reads localStorage for {unit}_{year} first; falls back to Firestore-loaded rows; final fallback is 0.
-  const kpiValues = useMemo<Record<string, number>>(() => {
+ const kpiValues = useMemo<any>(() => {
     if (activeModule !== 'dashboard') return {};
     const u = factory, y = year;
     const lsElec = readStoredModule('inv_electricity_solar', u, y);
