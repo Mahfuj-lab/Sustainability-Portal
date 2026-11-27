@@ -1,4 +1,5 @@
 import React from 'react';
+import RefrigerantOdsForm from './RefrigerantOdsForm';
 import WasteManagementForm from './WasteManagementForm';
 import WaterWithdrawalForm from './WaterWithdrawalForm';
 import BoilerGeneratorCompressorForm from './BoilerGeneratorCompressorForm';
@@ -138,6 +139,9 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({
     icon: Info,
     description: 'Module details not found.'
   };
+if (activeSubModule === 'inv_refrigerant_ods') {
+  return <RefrigerantOdsForm selectedUnit={selectedUnit} selectedYear={selectedYear} />;
+}
 
   const Icon = currentModule.icon;
   if (activeSubModule === 'inv_production_operations') {
