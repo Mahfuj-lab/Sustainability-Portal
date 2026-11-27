@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, X, Printer, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { Save, Plus, X, Printer, CheckCircle2, AlertCircle, FileSpreadsheet, Lock } from 'lucide-react';
 import { UNIT_DIRECTORY } from '../utils/unitDirectory';
 
 export interface NaturalGasDieselVehiclesFormProps {
@@ -36,6 +36,105 @@ const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
+
+/* ------------------------------------------------------------------ */
+/* Section-matched colour theme (all class names are literal strings   */
+/* so Tailwind can detect them).                                       */
+/* ------------------------------------------------------------------ */
+interface SectionTheme {
+  head: string;      // group header cell (row 1)
+  sub: string;       // sub-header cell (row 2)
+  tint: string;      // editable column background tint
+  lock: string;      // read-only locked cell (body)
+  lockFoot: string;  // read-only locked cell (footer)
+  foot: string;      // editable-column footer cell
+  border: string;    // box border colour
+  input: string;     // focus ring for inputs
+  addBtn: string;    // inline add button in header
+}
+
+const THEME: Record<'ng' | 'gen' | 'pct' | 'boiler' | 'total' | 'veh' | 'rem', SectionTheme> = {
+  ng: {
+    head: 'bg-emerald-200 text-emerald-950',
+    sub: 'bg-emerald-100 text-emerald-900',
+    tint: 'bg-emerald-50',
+    lock: 'bg-emerald-100 text-emerald-900',
+    lockFoot: 'bg-emerald-200 text-emerald-950',
+    foot: 'bg-emerald-100 text-emerald-900',
+    border: 'border-emerald-300',
+    input: 'focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200',
+    addBtn: 'bg-white text-emerald-800 border-emerald-400 hover:bg-emerald-50',
+  },
+  gen: {
+    head: 'bg-sky-200 text-sky-950',
+    sub: 'bg-sky-100 text-sky-900',
+    tint: 'bg-sky-50',
+    lock: 'bg-sky-100 text-sky-900',
+    lockFoot: 'bg-sky-200 text-sky-950',
+    foot: 'bg-sky-100 text-sky-900',
+    border: 'border-sky-300',
+    input: 'focus:border-sky-600 focus:ring-2 focus:ring-sky-200',
+    addBtn: 'bg-white text-sky-800 border-sky-400 hover:bg-sky-50',
+  },
+  pct: {
+    head: 'bg-indigo-200 text-indigo-950',
+    sub: 'bg-indigo-100 text-indigo-900',
+    tint: 'bg-indigo-50',
+    lock: 'bg-indigo-100 text-indigo-900',
+    lockFoot: 'bg-indigo-200 text-indigo-950',
+    foot: 'bg-indigo-100 text-indigo-900',
+    border: 'border-indigo-300',
+    input: 'focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200',
+    addBtn: 'bg-white text-indigo-800 border-indigo-400 hover:bg-indigo-50',
+  },
+  boiler: {
+    head: 'bg-teal-200 text-teal-950',
+    sub: 'bg-teal-100 text-teal-900',
+    tint: 'bg-teal-50',
+    lock: 'bg-teal-100 text-teal-900',
+    lockFoot: 'bg-teal-200 text-teal-950',
+    foot: 'bg-teal-100 text-teal-900',
+    border: 'border-teal-300',
+    input: 'focus:border-teal-600 focus:ring-2 focus:ring-teal-200',
+    addBtn: 'bg-white text-teal-800 border-teal-400 hover:bg-teal-50',
+  },
+  total: {
+    head: 'bg-green-200 text-green-950',
+    sub: 'bg-green-100 text-green-900',
+    tint: 'bg-green-50',
+    lock: 'bg-green-100 text-green-900',
+    lockFoot: 'bg-green-200 text-green-950',
+    foot: 'bg-green-100 text-green-900',
+    border: 'border-green-300',
+    input: 'focus:border-green-600 focus:ring-2 focus:ring-green-200',
+    addBtn: 'bg-white text-green-800 border-green-400 hover:bg-green-50',
+  },
+  veh: {
+    head: 'bg-amber-200 text-amber-950',
+    sub: 'bg-amber-100 text-amber-900',
+    tint: 'bg-amber-50',
+    lock: 'bg-amber-100 text-amber-900',
+    lockFoot: 'bg-amber-200 text-amber-950',
+    foot: 'bg-amber-100 text-amber-900',
+    border: 'border-amber-300',
+    input: 'focus:border-amber-600 focus:ring-2 focus:ring-amber-200',
+    addBtn: 'bg-white text-amber-800 border-amber-400 hover:bg-amber-50',
+  },
+  rem: {
+    head: 'bg-slate-200 text-slate-900',
+    sub: 'bg-slate-100 text-slate-800',
+    tint: 'bg-slate-50',
+    lock: 'bg-slate-100 text-slate-800',
+    lockFoot: 'bg-slate-200 text-slate-900',
+    foot: 'bg-slate-100 text-slate-700',
+    border: 'border-slate-300',
+    input: 'focus:border-slate-500 focus:ring-2 focus:ring-slate-200',
+    addBtn: 'bg-white text-slate-700 border-slate-400 hover:bg-slate-50',
+  },
+};
+
+const INPUT_BASE =
+  'border border-slate-300 bg-white rounded px-2 py-1 text-right outline-none transition text-xs disabled:bg-slate-50 disabled:text-slate-600 disabled:cursor-not-allowed';
 
 const n = (val: any): number => {
   const num = parseFloat(val);
@@ -94,6 +193,93 @@ const isValidNumber = (val: string): boolean => {
   if (val === '') return true;
   return /^\d*(\.\d{0,2})?$/.test(val);
 };
+
+/* ------------------------------------------------------------------ */
+/* Small presentational helpers                                        */
+/* ------------------------------------------------------------------ */
+
+interface MeterHeaderCellProps {
+  meter: MeterItem;
+  theme: SectionTheme;
+  canRemove: boolean;
+  isViewer: boolean;
+  onChange: (field: 'name' | 'subLabel', value: string) => void;
+  onRemove: () => void;
+}
+
+const MeterHeaderCell: React.FC<MeterHeaderCellProps> = ({ meter, theme, canRemove, isViewer, onChange, onRemove }) => (
+  <th className={`px-2 py-2 text-center min-w-[120px] border ${theme.border} ${theme.sub}`}>
+    <div className="flex flex-col items-center gap-1">
+      <div className="flex items-center gap-1 w-full">
+        <input
+          type="text"
+          value={meter.name}
+          onChange={(e) => onChange('name', e.target.value)}
+          disabled={isViewer}
+          className={`w-full ${INPUT_BASE} !text-center font-semibold ${theme.input}`}
+        />
+        {!isViewer && canRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            title="Remove column"
+            className="no-print shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border border-red-300 bg-white text-red-600 hover:bg-red-50 hover:text-red-700 transition"
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
+      <input
+        type="text"
+        placeholder="Sub-label"
+        value={meter.subLabel}
+        onChange={(e) => onChange('subLabel', e.target.value)}
+        disabled={isViewer}
+        className={`w-full ${INPUT_BASE} !text-center !text-[10px] text-slate-500 ${theme.input}`}
+      />
+    </div>
+  </th>
+);
+
+interface GroupHeadProps {
+  colSpan: number;
+  theme: SectionTheme;
+  label: string;
+  addLabel?: string;
+  onAdd?: () => void;
+  isViewer: boolean;
+}
+
+const GroupHead: React.FC<GroupHeadProps> = ({ colSpan, theme, label, addLabel, onAdd, isViewer }) => (
+  <th colSpan={colSpan} className={`px-3 py-2 border ${theme.border} ${theme.head} text-center`}>
+    <div className="flex items-center justify-center gap-3 flex-wrap">
+      <span className="font-bold uppercase tracking-wider text-xs">{label}</span>
+      {!isViewer && addLabel && onAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className={`no-print inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-semibold normal-case tracking-normal transition ${theme.addBtn}`}
+        >
+          <Plus size={12} /> {addLabel}
+        </button>
+      )}
+    </div>
+  </th>
+);
+
+const LockedHead: React.FC<{ theme: SectionTheme; children: React.ReactNode }> = ({ theme, children }) => (
+  <th rowSpan={1} className={`px-2 py-2 text-center whitespace-nowrap border ${theme.border} ${theme.sub} font-bold text-xs`}>
+    <span className="inline-flex items-center gap-1">
+      <Lock size={10} className="opacity-60" /> {children}
+    </span>
+  </th>
+);
+
+const PlainHead: React.FC<{ theme: SectionTheme; children: React.ReactNode }> = ({ theme, children }) => (
+  <th className={`px-2 py-2 text-center whitespace-nowrap border ${theme.border} ${theme.sub} font-bold text-xs`}>
+    {children}
+  </th>
+);
 
 export default function NaturalGasDieselVehiclesForm({
   selectedUnit,
@@ -626,25 +812,66 @@ export default function NaturalGasDieselVehiclesForm({
 
   const isRatioSynced = Object.keys(elecRatio).length > 0;
 
+  /* ---------------------------------------------------------------- */
+  /* Rendering helpers (UI only)                                       */
+  /* ---------------------------------------------------------------- */
+
+  const renderInputCell = (
+    key: string,
+    theme: SectionTheme,
+    value: string,
+    onChange: (v: string) => void,
+    extraTdClass: string = ''
+  ) => (
+    <td key={key} className={`px-1.5 py-1.5 border ${theme.border} ${theme.tint} ${extraTdClass}`}>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={isViewer}
+        className={`w-24 ${INPUT_BASE} ${theme.input}`}
+      />
+    </td>
+  );
+
+  const renderLockedCell = (theme: SectionTheme, value: string, strong: boolean = true) => (
+    <td className={`px-3 py-1.5 border ${theme.border} ${theme.lock} text-right text-xs tabular-nums ${strong ? 'font-bold' : 'font-semibold'}`}>
+      {value}
+    </td>
+  );
+
+  const renderFootCell = (theme: SectionTheme, value: string, locked: boolean = false) => (
+    <td className={`px-3 py-2 border ${theme.border} text-right text-xs font-bold tabular-nums ${locked ? theme.lockFoot : theme.foot}`}>
+      {value}
+    </td>
+  );
+
+  const ngColSpan = ngMeters.length + 1 + (sections.showEnergy ? 1 : 0) + (sections.includeTK ? 1 : 0);
+  const combColSpan = 3 + (sections.showEnergy ? 1 : 0) + (sections.includeTK ? 1 : 0);
+  const vehColSpan = 3 + (sections.includeTK ? 3 : 0);
+
+  const checkboxClass = 'flex items-center gap-1.5 cursor-pointer px-2.5 py-1 rounded-md border bg-white hover:bg-slate-50 transition text-xs font-medium text-slate-700';
+
   return (
-    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm">
+    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-md border border-slate-200">
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Natural Gas, Diesel &amp; Vehicles</h1>
           <div className="flex flex-wrap items-center gap-2 mt-1">
             <p className="text-sm text-slate-500">{unitInfo.fullName}</p>
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
               Reporting Year: {safeYear}
             </span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-100 text-indigo-800 border border-indigo-300">
               NG: {energyFactors.ngMjPerM3} MJ/m³ ({energyFactors.ngKwhPerM3} kWh/m³) | Diesel: {energyFactors.dieselMjPerLiter} MJ/L
             </span>
             {isRatioSynced ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-100 text-sky-800 border border-sky-300">
                 <CheckCircle2 size={12} /> Electricity Ratio Synced
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
                 <AlertCircle size={12} /> Electricity Ratio Not Found
               </span>
             )}
@@ -682,35 +909,35 @@ export default function NaturalGasDieselVehiclesForm({
         </div>
       </div>
 
-      <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-4 text-sm no-print">
+      <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-2 text-sm no-print">
         <span className="font-semibold text-slate-700 mr-2">Report Columns / Sections:</span>
         
-        <label className="flex items-center gap-1.5 cursor-pointer">
+        <label className={`${checkboxClass} border-emerald-300`}>
           <input type="checkbox" checked={sections.ng} onChange={() => setSections(p => ({...p, ng: !p.ng}))} className="accent-emerald-600 w-4 h-4" />
           <span>Natural Gas (m³)</span>
         </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.diesel} onChange={() => setSections(p => ({...p, diesel: !p.diesel}))} className="accent-blue-600 w-4 h-4" />
+        <label className={`${checkboxClass} border-sky-300`}>
+          <input type="checkbox" checked={sections.diesel} onChange={() => setSections(p => ({...p, diesel: !p.diesel}))} className="accent-sky-600 w-4 h-4" />
           <span>Generator &amp; Boiler Diesel (L)</span>
         </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
+        <label className={`${checkboxClass} border-indigo-300 ${!sections.diesel ? 'opacity-60' : ''}`}>
           <input type="checkbox" checked={sections.genPct} onChange={() => setSections(p => ({...p, genPct: !p.genPct}))} disabled={!sections.diesel} className="accent-indigo-600 w-4 h-4 disabled:opacity-50" />
           <span className={!sections.diesel ? 'text-slate-400' : ''}>Show Generator Diesel (%)</span>
         </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
+        <label className={`${checkboxClass} border-amber-300`}>
           <input type="checkbox" checked={sections.vehicles} onChange={() => setSections(p => ({...p, vehicles: !p.vehicles}))} className="accent-amber-600 w-4 h-4" />
           <span>Vehicles Fuel</span>
         </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.includeTK} onChange={() => setSections(p => ({...p, includeTK: !p.includeTK}))} className="accent-emerald-600 w-4 h-4" />
+        <label className={`${checkboxClass} border-green-300`}>
+          <input type="checkbox" checked={sections.includeTK} onChange={() => setSections(p => ({...p, includeTK: !p.includeTK}))} className="accent-green-600 w-4 h-4" />
           <span>Include All Tk (BDT) Columns</span>
         </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
+        <label className={`${checkboxClass} border-violet-300`}>
           <input type="checkbox" checked={sections.showEnergy} onChange={() => setSections(p => ({...p, showEnergy: !p.showEnergy}))} className="accent-violet-600 w-4 h-4" />
           <span>Show Energy Conversion (MJ / kWh)</span>
         </label>
-        <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.remarks} onChange={() => setSections(p => ({...p, remarks: !p.remarks}))} className="accent-gray-600 w-4 h-4" />
+        <label className={`${checkboxClass} border-slate-300`}>
+          <input type="checkbox" checked={sections.remarks} onChange={() => setSections(p => ({...p, remarks: !p.remarks}))} className="accent-slate-600 w-4 h-4" />
           <span>Remarks</span>
         </label>
       </div>
@@ -721,50 +948,73 @@ export default function NaturalGasDieselVehiclesForm({
         </div>
       )}
 
-      <div className="overflow-x-auto border border-slate-200 rounded-lg">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-600 font-semibold">
+      <div className="overflow-x-auto border border-slate-300 rounded-lg shadow-sm">
+        <table className="w-full text-sm text-left border-collapse">
+          <thead>
             <tr>
-              <th rowSpan={2} className="px-2 py-2 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 w-24 text-center">Month</th>
+              <th rowSpan={2} className="px-2 py-2 sticky left-0 z-30 bg-slate-700 text-white border border-slate-600 w-28 min-w-[112px] text-center text-xs font-bold uppercase tracking-wider shadow-[2px_0_0_0_rgba(15,23,42,0.15)]">
+                Month
+              </th>
               
               {sections.ng && (
-                <th colSpan={ngMeters.length + 1 + (sections.showEnergy ? 1 : 0) + (sections.includeTK ? 1 : 0)} className="px-2 py-2 bg-emerald-100 text-emerald-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Natural Gas (m³)
-                </th>
+                <GroupHead
+                  colSpan={ngColSpan}
+                  theme={THEME.ng}
+                  label="Natural Gas (m³)"
+                  addLabel="Add NG Meter"
+                  onAdd={() => addMeter('ng')}
+                  isViewer={isViewer}
+                />
               )}
 
               {sections.diesel && (
-                <th colSpan={generators.length + 3} className="px-2 py-2 bg-blue-100 text-blue-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Generator Diesel (L)
-                </th>
+                <GroupHead
+                  colSpan={generators.length + 3}
+                  theme={THEME.gen}
+                  label="Generator Diesel (L)"
+                  addLabel="Add Generator"
+                  onAdd={() => addMeter('gen')}
+                  isViewer={isViewer}
+                />
               )}
 
               {sections.genPct && (
-                <th rowSpan={2} className="px-2 py-2 bg-indigo-100 text-indigo-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Gen. Diesel (%)
+                <th rowSpan={2} className={`px-2 py-2 text-center border ${THEME.pct.border} ${THEME.pct.head} font-bold uppercase tracking-wider text-xs min-w-[100px]`}>
+                  <span className="inline-flex items-center gap-1"><Lock size={10} className="opacity-60" /> Generator Diesel (%)</span>
                 </th>
               )}
 
               {sections.diesel && (
-                <th colSpan={boilers.length + 1} className="px-2 py-2 bg-blue-100 text-blue-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Boiler Diesel (L)
-                </th>
+                <GroupHead
+                  colSpan={boilers.length + 1}
+                  theme={THEME.boiler}
+                  label="Boiler Diesel (L)"
+                  addLabel="Add Boiler"
+                  onAdd={() => addMeter('boiler')}
+                  isViewer={isViewer}
+                />
               )}
 
               {sections.diesel && (
-                <th colSpan={3 + (sections.showEnergy ? 1 : 0) + (sections.includeTK ? 1 : 0)} className="px-2 py-2 bg-emerald-100 text-emerald-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  (Boiler + Generator) Total Diesel (L)
-                </th>
+                <GroupHead
+                  colSpan={combColSpan}
+                  theme={THEME.total}
+                  label="(Boiler + Generator) Total Diesel (L)"
+                  isViewer={isViewer}
+                />
               )}
 
               {sections.vehicles && (
-                <th colSpan={3 + (sections.includeTK ? 3 : 0)} className="px-2 py-2 bg-amber-100 text-amber-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Vehicles Fuel
-                </th>
+                <GroupHead
+                  colSpan={vehColSpan}
+                  theme={THEME.veh}
+                  label="Vehicles Fuel"
+                  isViewer={isViewer}
+                />
               )}
 
               {sections.remarks && (
-                <th rowSpan={2} className="px-2 py-2 bg-gray-100 text-gray-900 text-center font-bold uppercase tracking-wider">
+                <th rowSpan={2} className={`px-3 py-2 text-center border ${THEME.rem.border} ${THEME.rem.head} font-bold uppercase tracking-wider text-xs min-w-[160px]`}>
                   Remarks
                 </th>
               )}
@@ -774,49 +1024,35 @@ export default function NaturalGasDieselVehiclesForm({
               {sections.ng && (
                 <>
                   {ngMeters.map((m) => (
-                    <th key={m.id} className="px-2 py-1 text-center bg-emerald-50 min-w-[100px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <input
-                          type="text"
-                          value={m.name}
-                          onChange={(e) => updateMeterName('ng', m.id, 'name', e.target.value)}
-                          disabled={isViewer}
-                          className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-emerald-500 disabled:bg-transparent disabled:border-transparent"
-                        />
-                        <div className="flex items-center gap-1 w-full">
-                          <input
-                            type="text"
-                            placeholder="Sub-label"
-                            value={m.subLabel}
-                            onChange={(e) => updateMeterName('ng', m.id, 'subLabel', e.target.value)}
-                            disabled={isViewer}
-                            className="w-full text-[10px] px-1 py-0.5 border border-slate-200 rounded text-center focus:outline-none focus:border-emerald-500 disabled:bg-transparent disabled:border-transparent text-slate-500"
-                          />
-                          {!isViewer && ngMeters.length > 1 && (
-                            <button onClick={() => removeMeter('ng', m.id)} className="text-red-500 hover:text-red-700 no-print">
-                              <X size={12} />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </th>
+                    <MeterHeaderCell
+                      key={m.id}
+                      meter={m}
+                      theme={THEME.ng}
+                      canRemove={ngMeters.length > 1}
+                      isViewer={isViewer}
+                      onChange={(field, value) => updateMeterName('ng', m.id, field, value)}
+                      onRemove={() => removeMeter('ng', m.id)}
+                    />
                   ))}
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Total NG (m³)</th>
+                  <LockedHead theme={THEME.ng}>Total NG (m³)</LockedHead>
                   {sections.showEnergy && (
-                    <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">
-                      <select
-                        value={ngEnergyUnit}
-                        onChange={(e) => setNgEnergyUnit(e.target.value as 'MJ' | 'kWh')}
-                        disabled={isViewer}
-                        className="text-xs font-semibold bg-transparent border-none outline-none cursor-pointer text-center"
-                      >
-                        <option value="MJ">Total NG (MJ)</option>
-                        <option value="kWh">Total NG (kWh)</option>
-                      </select>
+                    <th className={`px-2 py-2 text-center whitespace-nowrap border ${THEME.ng.border} ${THEME.ng.sub}`}>
+                      <span className="inline-flex items-center gap-1">
+                        <Lock size={10} className="opacity-60" />
+                        <select
+                          value={ngEnergyUnit}
+                          onChange={(e) => setNgEnergyUnit(e.target.value as 'MJ' | 'kWh')}
+                          disabled={isViewer}
+                          className="text-xs font-bold bg-white border border-slate-300 rounded px-1 py-0.5 outline-none cursor-pointer text-center focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 transition disabled:cursor-not-allowed"
+                        >
+                          <option value="MJ">Total NG (MJ)</option>
+                          <option value="kWh">Total NG (kWh)</option>
+                        </select>
+                      </span>
                     </th>
                   )}
                   {sections.includeTK && (
-                    <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Total Tk (BDT)</th>
+                    <PlainHead theme={THEME.ng}>Total Tk (BDT)</PlainHead>
                   )}
                 </>
               )}
@@ -824,210 +1060,166 @@ export default function NaturalGasDieselVehiclesForm({
               {sections.diesel && (
                 <>
                   {generators.map((m) => (
-                    <th key={m.id} className="px-2 py-1 text-center bg-blue-50 min-w-[100px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <input
-                          type="text"
-                          value={m.name}
-                          onChange={(e) => updateMeterName('gen', m.id, 'name', e.target.value)}
-                          disabled={isViewer}
-                          className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-blue-500 disabled:bg-transparent disabled:border-transparent"
-                        />
-                        <div className="flex items-center gap-1 w-full">
-                          <input
-                            type="text"
-                            placeholder="Sub-label"
-                            value={m.subLabel}
-                            onChange={(e) => updateMeterName('gen', m.id, 'subLabel', e.target.value)}
-                            disabled={isViewer}
-                            className="w-full text-[10px] px-1 py-0.5 border border-slate-200 rounded text-center focus:outline-none focus:border-blue-500 disabled:bg-transparent disabled:border-transparent text-slate-500"
-                          />
-                          {!isViewer && generators.length > 1 && (
-                            <button onClick={() => removeMeter('gen', m.id)} className="text-red-500 hover:text-red-700 no-print">
-                              <X size={12} />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </th>
+                    <MeterHeaderCell
+                      key={m.id}
+                      meter={m}
+                      theme={THEME.gen}
+                      canRemove={generators.length > 1}
+                      isViewer={isViewer}
+                      onChange={(field, value) => updateMeterName('gen', m.id, field, value)}
+                      onRemove={() => removeMeter('gen', m.id)}
+                    />
                   ))}
-
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50 border-l border-slate-200">Gen. Total</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50">Gen. Dom.</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50">Gen. Prod.</th>
+                  <LockedHead theme={THEME.gen}>Gen. Total</LockedHead>
+                  <LockedHead theme={THEME.gen}>Gen. Dom.</LockedHead>
+                  <LockedHead theme={THEME.gen}>Gen. Prod.</LockedHead>
                 </>
               )}
 
               {sections.diesel && (
                 <>
                   {boilers.map((m) => (
-                    <th key={m.id} className="px-2 py-1 text-center bg-blue-50 min-w-[100px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <input
-                          type="text"
-                          value={m.name}
-                          onChange={(e) => updateMeterName('boiler', m.id, 'name', e.target.value)}
-                          disabled={isViewer}
-                          className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-blue-500 disabled:bg-transparent disabled:border-transparent"
-                        />
-                        <div className="flex items-center gap-1 w-full">
-                          <input
-                            type="text"
-                            placeholder="Sub-label"
-                            value={m.subLabel}
-                            onChange={(e) => updateMeterName('boiler', m.id, 'subLabel', e.target.value)}
-                            disabled={isViewer}
-                            className="w-full text-[10px] px-1 py-0.5 border border-slate-200 rounded text-center focus:outline-none focus:border-blue-500 disabled:bg-transparent disabled:border-transparent text-slate-500"
-                          />
-                          {!isViewer && boilers.length > 1 && (
-                            <button onClick={() => removeMeter('boiler', m.id)} className="text-red-500 hover:text-red-700 no-print">
-                              <X size={12} />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </th>
+                    <MeterHeaderCell
+                      key={m.id}
+                      meter={m}
+                      theme={THEME.boiler}
+                      canRemove={boilers.length > 1}
+                      isViewer={isViewer}
+                      onChange={(field, value) => updateMeterName('boiler', m.id, field, value)}
+                      onRemove={() => removeMeter('boiler', m.id)}
+                    />
                   ))}
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50 border-l border-slate-200">Boiler Total</th>
+                  <LockedHead theme={THEME.boiler}>Boiler Total</LockedHead>
                 </>
               )}
 
               {sections.diesel && (
                 <>
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Total Diesel (L)</th>
+                  <LockedHead theme={THEME.total}>Total Diesel (L)</LockedHead>
                   {sections.showEnergy && (
-                    <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total Diesel (MJ)</th>
+                    <LockedHead theme={THEME.total}>Total Diesel (MJ)</LockedHead>
                   )}
                   {sections.includeTK && (
-                    <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Total Tk (BDT)</th>
+                    <PlainHead theme={THEME.total}>Total Tk (BDT)</PlainHead>
                   )}
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total Dom.</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total Prod.</th>
+                  <LockedHead theme={THEME.total}>Total Dom.</LockedHead>
+                  <LockedHead theme={THEME.total}>Total Prod.</LockedHead>
                 </>
               )}
 
               {sections.vehicles && (
                 <>
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-amber-50/50">Diesel (L)</th>
-                  {sections.includeTK && <th className="px-2 py-2 text-center whitespace-nowrap bg-amber-50/50">Diesel Tk</th>}
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-amber-50/50">CNG (m³)</th>
-                  {sections.includeTK && <th className="px-2 py-2 text-center whitespace-nowrap bg-amber-50/50">CNG Tk</th>}
-                  <th className="px-2 py-2 text-center whitespace-nowrap bg-amber-50/50">Octane (L)</th>
-                  {sections.includeTK && <th className="px-2 py-2 text-center whitespace-nowrap bg-amber-50/50">Octane Tk</th>}
+                  <PlainHead theme={THEME.veh}>Diesel (L)</PlainHead>
+                  {sections.includeTK && <PlainHead theme={THEME.veh}>Diesel Tk</PlainHead>}
+                  <PlainHead theme={THEME.veh}>CNG (m³)</PlainHead>
+                  {sections.includeTK && <PlainHead theme={THEME.veh}>CNG Tk</PlainHead>}
+                  <PlainHead theme={THEME.veh}>Octane (L)</PlainHead>
+                  {sections.includeTK && <PlainHead theme={THEME.veh}>Octane Tk</PlainHead>}
                 </>
               )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {MONTHS.map((month, idx) => {
               const row = data[month] || getEmptyMonth();
+              const stripe = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50';
               return (
-                <tr key={month} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                  <td className="px-2 py-1 font-semibold text-slate-700 sticky left-0 bg-inherit z-10 border-r border-slate-200">{month}</td>
+                <tr key={month} className="hover:brightness-[0.98] transition">
+                  <td className={`px-3 py-1.5 font-bold text-slate-700 text-xs sticky left-0 z-20 border border-slate-300 shadow-[2px_0_0_0_rgba(100,116,139,0.15)] ${stripe}`}>
+                    {month}
+                  </td>
                   
                   {sections.ng && (
                     <>
-                      {ngMeters.map(m => (
-                        <td key={`row-${month}-${m.id}`} className="px-1 py-1">
-                          <input type="text" inputMode="decimal" value={row.ngValues?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'ngValues', m.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
-                        </td>
-                      ))}
-                      <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30 border-l border-slate-200">{fmt(getTotalNG(row), 2)}</td>
-                      {sections.showEnergy && (
-                        <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{fmt(getTotalNGEnergy(row), 2)}</td>
+                      {ngMeters.map(m =>
+                        renderInputCell(`row-${month}-${m.id}`, THEME.ng, row.ngValues?.[m.id] || '', (v) => updateNestedQty(month, 'ngValues', m.id, v))
                       )}
-                      {sections.includeTK && (
-                        <td className="px-1 py-1 border-l border-slate-200"><input type="text" inputMode="decimal" value={row.totalTkNG} onChange={(e) => updateMonthField(month, 'totalTkNG', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      )}
+                      {renderLockedCell(THEME.ng, fmt(getTotalNG(row), 2))}
+                      {sections.showEnergy && renderLockedCell(THEME.ng, fmt(getTotalNGEnergy(row), 2))}
+                      {sections.includeTK &&
+                        renderInputCell(`row-${month}-tkng`, THEME.ng, row.totalTkNG, (v) => updateMonthField(month, 'totalTkNG', v))}
                     </>
                   )}
 
                   {sections.diesel && (
                     <>
-                      {generators.map(m => (
-                        <td key={`row-${month}-${m.id}`} className="px-1 py-1">
-                          <input type="text" inputMode="decimal" value={row.genDieselValues?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'genDieselValues', m.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
-                        </td>
-                      ))}
-                      <td className="px-2 py-1 text-right font-bold text-blue-700 bg-blue-50/30 border-l border-slate-200">{fmt(getTotalGenDiesel(row), 2)}</td>
-                      <td className="px-2 py-1 text-right text-blue-700 bg-blue-50/10">{fmt(getDomDiesel(month, row), 3)}</td>
-                      <td className="px-2 py-1 text-right text-blue-700 bg-blue-50/10">{fmt(getProdDiesel(month, row), 3)}</td>
+                      {generators.map(m =>
+                        renderInputCell(`row-${month}-${m.id}`, THEME.gen, row.genDieselValues?.[m.id] || '', (v) => updateNestedQty(month, 'genDieselValues', m.id, v))
+                      )}
+                      {renderLockedCell(THEME.gen, fmt(getTotalGenDiesel(row), 2))}
+                      {renderLockedCell(THEME.gen, fmt(getDomDiesel(month, row), 3), false)}
+                      {renderLockedCell(THEME.gen, fmt(getProdDiesel(month, row), 3), false)}
                     </>
                   )}
 
-                  {sections.genPct && (
-                    <td className="px-2 py-1 text-right text-indigo-700 bg-indigo-50/30">{fmt(getGenPct(row), 4)}</td>
-                  )}
+                  {sections.genPct && renderLockedCell(THEME.pct, fmt(getGenPct(row), 4))}
 
                   {sections.diesel && (
                     <>
-                      {boilers.map(m => (
-                        <td key={`row-${month}-${m.id}`} className="px-1 py-1">
-                          <input type="text" inputMode="decimal" value={row.boilerDieselValues?.[m.id] || ''} onChange={(e) => updateNestedQty(month, 'boilerDieselValues', m.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
-                        </td>
-                      ))}
-                      <td className="px-2 py-1 text-right font-bold text-blue-700 bg-blue-50/30">{fmt(getTotalBoilerDiesel(row), 2)}</td>
+                      {boilers.map(m =>
+                        renderInputCell(`row-${month}-${m.id}`, THEME.boiler, row.boilerDieselValues?.[m.id] || '', (v) => updateNestedQty(month, 'boilerDieselValues', m.id, v))
+                      )}
+                      {renderLockedCell(THEME.boiler, fmt(getTotalBoilerDiesel(row), 2))}
                     </>
                   )}
 
                   {sections.diesel && (
                     <>
-                      <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30 border-l border-slate-200">{fmt(getTotalDiesel(row), 2)}</td>
-                      {sections.showEnergy && (
-                        <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{fmt(getTotalDieselMj(row), 2)}</td>
-                      )}
-                      {sections.includeTK && (
-                        <td className="px-1 py-1 border-l border-slate-200"><input type="text" inputMode="decimal" value={row.totalTkDiesel} onChange={(e) => updateMonthField(month, 'totalTkDiesel', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      )}
-                      <td className="px-2 py-1 text-right text-emerald-700 bg-emerald-50/10">{fmt(getTotalDomDiesel(month, row), 3)}</td>
-                      <td className="px-2 py-1 text-right text-emerald-700 bg-emerald-50/10">{fmt(getTotalProdDiesel(month, row), 3)}</td>
+                      {renderLockedCell(THEME.total, fmt(getTotalDiesel(row), 2))}
+                      {sections.showEnergy && renderLockedCell(THEME.total, fmt(getTotalDieselMj(row), 2))}
+                      {sections.includeTK &&
+                        renderInputCell(`row-${month}-tkdiesel`, THEME.total, row.totalTkDiesel, (v) => updateMonthField(month, 'totalTkDiesel', v))}
+                      {renderLockedCell(THEME.total, fmt(getTotalDomDiesel(month, row), 3), false)}
+                      {renderLockedCell(THEME.total, fmt(getTotalProdDiesel(month, row), 3), false)}
                     </>
                   )}
 
                   {sections.vehicles && (
                     <>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.vehDieselL} onChange={(e) => updateMonthField(month, 'vehDieselL', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      {sections.includeTK && (
-                        <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.vehDieselTk} onChange={(e) => updateMonthField(month, 'vehDieselTk', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      )}
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.vehCngM3} onChange={(e) => updateMonthField(month, 'vehCngM3', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      {sections.includeTK && (
-                        <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.vehCngTk} onChange={(e) => updateMonthField(month, 'vehCngTk', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      )}
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.vehOctaneL} onChange={(e) => updateMonthField(month, 'vehOctaneL', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      {sections.includeTK && (
-                        <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.vehOctaneTk} onChange={(e) => updateMonthField(month, 'vehOctaneTk', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      )}
+                      {renderInputCell(`row-${month}-vdl`, THEME.veh, row.vehDieselL, (v) => updateMonthField(month, 'vehDieselL', v))}
+                      {sections.includeTK &&
+                        renderInputCell(`row-${month}-vdtk`, THEME.veh, row.vehDieselTk, (v) => updateMonthField(month, 'vehDieselTk', v))}
+                      {renderInputCell(`row-${month}-vcng`, THEME.veh, row.vehCngM3, (v) => updateMonthField(month, 'vehCngM3', v))}
+                      {sections.includeTK &&
+                        renderInputCell(`row-${month}-vcngtk`, THEME.veh, row.vehCngTk, (v) => updateMonthField(month, 'vehCngTk', v))}
+                      {renderInputCell(`row-${month}-voct`, THEME.veh, row.vehOctaneL, (v) => updateMonthField(month, 'vehOctaneL', v))}
+                      {sections.includeTK &&
+                        renderInputCell(`row-${month}-vocttk`, THEME.veh, row.vehOctaneTk, (v) => updateMonthField(month, 'vehOctaneTk', v))}
                     </>
                   )}
 
                   {sections.remarks && (
-                    <td className="px-1 py-1">
-                      <input type="text" value={row.remarks} onChange={(e) => updateMonthField(month, 'remarks', e.target.value)} disabled={isViewer} className="w-full min-w-[120px] px-2 py-1 border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" placeholder="Notes..." />
+                    <td className={`px-1.5 py-1.5 border ${THEME.rem.border} ${THEME.rem.tint}`}>
+                      <input
+                        type="text"
+                        value={row.remarks}
+                        onChange={(e) => updateMonthField(month, 'remarks', e.target.value)}
+                        disabled={isViewer}
+                        className={`w-full min-w-[150px] border border-slate-300 bg-white rounded px-2 py-1 text-left text-xs outline-none transition disabled:bg-slate-50 disabled:cursor-not-allowed ${THEME.rem.input}`}
+                        placeholder="Notes..."
+                      />
                     </td>
                   )}
                 </tr>
               );
             })}
           </tbody>
-          <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-bold text-xs">
+          <tfoot>
             <tr>
-              <td className="px-2 py-2 sticky left-0 bg-slate-100 z-10 border-r border-slate-300">Total</td>
+              <td className="px-3 py-2 sticky left-0 z-20 bg-slate-700 text-white font-bold text-xs border border-slate-600 shadow-[2px_0_0_0_rgba(15,23,42,0.15)]">
+                Total
+              </td>
               
               {sections.ng && (
                 <>
                   {ngMeters.map(m => {
                     let sum = 0;
                     MONTHS.forEach(month => { sum += n(data[month]?.ngValues?.[m.id]); });
-                    return <td key={`tot-${m.id}`} className="px-2 py-2 text-right text-emerald-800">{fmt(sum, 2)}</td>;
+                    return <React.Fragment key={`tot-${m.id}`}>{renderFootCell(THEME.ng, fmt(sum, 2))}</React.Fragment>;
                   })}
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50 border-l border-slate-200">{fmt(getYearlySum((m, r) => getTotalNG(r)), 2)}</td>
-                  {sections.showEnergy && (
-                    <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getTotalNGEnergy(r)), 2)}</td>
-                  )}
-                  {sections.includeTK && (
-                    <td className="px-2 py-2 text-right text-emerald-800 border-l border-slate-200">{fmt(getYearlySum((m, r) => n(r.totalTkNG)), 2)}</td>
-                  )}
+                  {renderFootCell(THEME.ng, fmt(getYearlySum((m, r) => getTotalNG(r)), 2), true)}
+                  {sections.showEnergy && renderFootCell(THEME.ng, fmt(getYearlySum((m, r) => getTotalNGEnergy(r)), 2), true)}
+                  {sections.includeTK && renderFootCell(THEME.ng, fmt(getYearlySum((m, r) => n(r.totalTkNG)), 2))}
                 </>
               )}
 
@@ -1036,18 +1228,18 @@ export default function NaturalGasDieselVehiclesForm({
                   {generators.map(m => {
                     let sum = 0;
                     MONTHS.forEach(month => { sum += n(data[month]?.genDieselValues?.[m.id]); });
-                    return <td key={`tot-${m.id}`} className="px-2 py-2 text-right text-blue-800">{fmt(sum, 2)}</td>;
+                    return <React.Fragment key={`tot-${m.id}`}>{renderFootCell(THEME.gen, fmt(sum, 2))}</React.Fragment>;
                   })}
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50 border-l border-slate-200">{fmt(getYearlySum((m, r) => getTotalGenDiesel(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50">{fmt(getYearlySum((m, r) => getDomDiesel(m, r)), 3)}</td>
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50">{fmt(getYearlySum((m, r) => getProdDiesel(m, r)), 3)}</td>
+                  {renderFootCell(THEME.gen, fmt(getYearlySum((m, r) => getTotalGenDiesel(r)), 2), true)}
+                  {renderFootCell(THEME.gen, fmt(getYearlySum((m, r) => getDomDiesel(m, r)), 3), true)}
+                  {renderFootCell(THEME.gen, fmt(getYearlySum((m, r) => getProdDiesel(m, r)), 3), true)}
                 </>
               )}
 
-              {sections.genPct && (
-                <td className="px-2 py-2 text-right text-indigo-800 bg-indigo-100/50">
-                  {fmt((getYearlySum((m, r) => getTotalDiesel(r)) > 0 ? (getYearlySum((m, r) => getTotalGenDiesel(r)) / getYearlySum((m, r) => getTotalDiesel(r))) * 100 : 0), 4)}
-                </td>
+              {sections.genPct && renderFootCell(
+                THEME.pct,
+                fmt((getYearlySum((m, r) => getTotalDiesel(r)) > 0 ? (getYearlySum((m, r) => getTotalGenDiesel(r)) / getYearlySum((m, r) => getTotalDiesel(r))) * 100 : 0), 4),
+                true
               )}
 
               {sections.diesel && (
@@ -1055,64 +1247,40 @@ export default function NaturalGasDieselVehiclesForm({
                   {boilers.map(m => {
                     let sum = 0;
                     MONTHS.forEach(month => { sum += n(data[month]?.boilerDieselValues?.[m.id]); });
-                    return <td key={`tot-${m.id}`} className="px-2 py-2 text-right text-blue-800">{fmt(sum, 2)}</td>;
+                    return <React.Fragment key={`tot-${m.id}`}>{renderFootCell(THEME.boiler, fmt(sum, 2))}</React.Fragment>;
                   })}
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50">{fmt(getYearlySum((m, r) => getTotalBoilerDiesel(r)), 2)}</td>
+                  {renderFootCell(THEME.boiler, fmt(getYearlySum((m, r) => getTotalBoilerDiesel(r)), 2), true)}
                 </>
               )}
 
               {sections.diesel && (
                 <>
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50 border-l border-slate-200">{fmt(getYearlySum((m, r) => getTotalDiesel(r)), 2)}</td>
-                  {sections.showEnergy && (
-                    <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getTotalDieselMj(r)), 2)}</td>
-                  )}
-                  {sections.includeTK && (
-                    <td className="px-2 py-2 text-right text-emerald-800 border-l border-slate-200">{fmt(getYearlySum((m, r) => n(r.totalTkDiesel)), 2)}</td>
-                  )}
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getTotalDomDiesel(m, r)), 3)}</td>
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getTotalProdDiesel(m, r)), 3)}</td>
+                  {renderFootCell(THEME.total, fmt(getYearlySum((m, r) => getTotalDiesel(r)), 2), true)}
+                  {sections.showEnergy && renderFootCell(THEME.total, fmt(getYearlySum((m, r) => getTotalDieselMj(r)), 2), true)}
+                  {sections.includeTK && renderFootCell(THEME.total, fmt(getYearlySum((m, r) => n(r.totalTkDiesel)), 2))}
+                  {renderFootCell(THEME.total, fmt(getYearlySum((m, r) => getTotalDomDiesel(m, r)), 3), true)}
+                  {renderFootCell(THEME.total, fmt(getYearlySum((m, r) => getTotalProdDiesel(m, r)), 3), true)}
                 </>
               )}
 
               {sections.vehicles && (
                 <>
-                  <td className="px-2 py-2 text-right text-amber-800">{fmt(getYearlySum((m, r) => n(r.vehDieselL)), 2)}</td>
-                  {sections.includeTK && <td className="px-2 py-2 text-right text-amber-800">{fmt(getYearlySum((m, r) => n(r.vehDieselTk)), 2)}</td>}
-                  <td className="px-2 py-2 text-right text-amber-800">{fmt(getYearlySum((m, r) => n(r.vehCngM3)), 2)}</td>
-                  {sections.includeTK && <td className="px-2 py-2 text-right text-amber-800">{fmt(getYearlySum((m, r) => n(r.vehCngTk)), 2)}</td>}
-                  <td className="px-2 py-2 text-right text-amber-800">{fmt(getYearlySum((m, r) => n(r.vehOctaneL)), 2)}</td>
-                  {sections.includeTK && <td className="px-2 py-2 text-right text-amber-800">{fmt(getYearlySum((m, r) => n(r.vehOctaneTk)), 2)}</td>}
+                  {renderFootCell(THEME.veh, fmt(getYearlySum((m, r) => n(r.vehDieselL)), 2))}
+                  {sections.includeTK && renderFootCell(THEME.veh, fmt(getYearlySum((m, r) => n(r.vehDieselTk)), 2))}
+                  {renderFootCell(THEME.veh, fmt(getYearlySum((m, r) => n(r.vehCngM3)), 2))}
+                  {sections.includeTK && renderFootCell(THEME.veh, fmt(getYearlySum((m, r) => n(r.vehCngTk)), 2))}
+                  {renderFootCell(THEME.veh, fmt(getYearlySum((m, r) => n(r.vehOctaneL)), 2))}
+                  {sections.includeTK && renderFootCell(THEME.veh, fmt(getYearlySum((m, r) => n(r.vehOctaneTk)), 2))}
                 </>
               )}
 
               {sections.remarks && (
-                <td className="px-2 py-2 text-right text-slate-400">-</td>
+                <td className={`px-3 py-2 border ${THEME.rem.border} ${THEME.rem.foot} text-center text-xs font-bold`}>-</td>
               )}
             </tr>
           </tfoot>
         </table>
       </div>
-
-      {!isViewer && (
-        <div className="mt-4 flex flex-wrap gap-3 no-print">
-          {sections.ng && (
-            <button onClick={() => addMeter('ng')} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-semibold transition-colors">
-              <Plus size={16} /> Add NG Meter
-            </button>
-          )}
-          {sections.diesel && (
-            <>
-              <button onClick={() => addMeter('gen')} className="flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-sm font-semibold transition-colors">
-                <Plus size={16} /> Add Generator
-              </button>
-              <button onClick={() => addMeter('boiler')} className="flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-sm font-semibold transition-colors">
-                <Plus size={16} /> Add Boiler
-              </button>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }
