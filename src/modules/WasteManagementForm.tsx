@@ -6,6 +6,7 @@ import { UNIT_DIRECTORY } from '../utils/unitDirectory';
 /* ------------------------------------------------------------------ */
 type SectionId = 'nonhaz' | 'haz' | 'recycle' | 'summary' | 'reject' | 'remarks';
 type Mode = 'all' | 'total';
+type RecycleType = 'Recycle' | 'Reuse';
 
 interface ItemDef {
   id: string;
@@ -19,6 +20,10 @@ interface GroupDef {
   title: string;
   totalLabel: string;
   hasSub: boolean;
+  /** Standalone groups have no sub-header and no sub-total; their items add directly into the section total. */
+  standalone?: boolean;
+  /** When false, no "+ Add" button is shown for this group. */
+  addable?: boolean;
   addLabel: string;
   includeLabel: string;
   allLabel: string;
@@ -56,6 +61,12 @@ interface Filters {
   summary: boolean;
   reject: boolean;
   remarks: boolean;
+}
+
+interface AddDialog {
+  gid: string;
+  name: string;
+  type: RecycleType;
 }
 
 type MonthData = Record<string, string>;
@@ -113,19 +124,38 @@ const GROUPS: GroupDef[] = [
     defaults: mk('electrical', ['Tube Light / CFL / LED Bulb', 'Electric Motor / Switchgear', 'Power Cable / Ballast']),
   },
   {
-    id: 'chemhaz', section: 'haz', title: 'Chemical Drum & Hazardous Items (kg)', totalLabel: 'Total Chemical Drum & Haz (kg)',
-    hasSub: true, addLabel: '+ Add Hazardous Item', includeLabel: 'Include Chemical Drum & Haz',
-    allLabel: 'All Individual Items', totalOnlyLabel: 'Total Chemical Drum & Haz Only',
-    defaults: mk('chemhaz', [
-      'Empty Chemical Drum (Plastic)', 'Empty Chemical Drum (Metal)', 'Contaminated Rags / Jhut',
-      'Waste Oil / Lubricant', 'Medical / First-Aid Waste',
+    id: 'chemdrum', section: 'haz', title: 'Chemical Drum & Can (kg)', totalLabel: 'Total Chemical Drum & Can (kg)',
+    hasSub: true, addable: false, addLabel: '', includeLabel: 'Include Chemical Drum & Can',
+    allLabel: 'All Chemical Drum & Can Items', totalOnlyLabel: 'Total Chemical Drum & Can Only',
+    defaults: mk('chemdrum', [
+      'Empty Chemical Drum (Plastic)',
+      'Empty Chemical Drum (Metal)',
+      'Chemical Can (Spot Lifter / Aerosol)',
+    ]),
+  },
+  {
+    id: 'hazother', section: 'haz', title: 'Contaminated / Burn Oil / Medical Waste (kg)', totalLabel: '',
+    hasSub: false, standalone: true, addLabel: '+ Add Hazardous Item',
+    includeLabel: 'Include Contaminated / Burn Oil / Medical Waste',
+    allLabel: 'All Individual Items', totalOnlyLabel: '',
+    defaults: mk('hazother', [
+      'Contaminated Rags / Jhut (kg)',
+      'Burn Oil / Waste Lubricant (kg)',
+      'Medical / First-Aid Waste (kg)',
     ]),
   },
   {
     id: 'recycle', section: 'recycle', title: 'Recycle / Reuse Waste (kg)', totalLabel: 'Total Recycle / Reuse (kg)',
-    hasSub: false, addLabel: '+ Add Recycle Item', includeLabel: 'Include Recycle / Reuse',
-    allLabel: 'All Individual Items', totalOnlyLabel: 'Total Recycle Only',
-    defaults: mk('recycle', ['Recycled Jhut / Fabric', 'Recycled Paper & Carton', 'Recycled Plastic', 'Reused Chemical Drum']),
+    hasSub: false, addLabel: '+ Add Recycle / Reuse Item', includeLabel: 'Include Recycle / Reuse',
+    allLabel: 'All Individual Items', totalOnlyLabel: 'Total Recycle / Reuse Only',
+    defaults: mk('rr', [
+      'Recycled Jhut / Fabric (kg)',
+      'Reused Jhut / Fabric (kg)',
+      'Reused Carton (kg)',
+      'Optimized Paper Use (kg)',
+      'Recycled Plastic (kg)',
+      'Reused Chemical Drum (kg)',
+    ]),
   },
 ];
 
@@ -236,7 +266,9 @@ const computeCalc = (
     t[g.id] = getItems(g.id).reduce((s, it) => s + num(row[it.id]), 0);
   });
   t.totalNonHaz = t.textile + t.plastic + t.othernonhaz;
-  t.totalHaz = t.electronics + t.electrical + t.chemhaz;
+  // Hazardous = Electronics + Electrical + Chemical Drum & Can total + standalone
+  // (Contaminated Rags + Burn Oil + Medical + custom hazardous items)
+  t.totalHaz = t.electronics + t.electrical + t.chemdrum + t.hazother;
   t.totalGenerated = t.totalNonHaz + t.totalHaz;
   t.totalRecycled = t.recycle;
   t.net = Math.max(0, t.totalGenerated - t.totalRecycled);
@@ -251,6 +283,20 @@ const buildColumns = (getItems: (gid: string) => ItemDef[], f: Filters | null): 
   const pushGroup = (g: GroupDef): boolean => {
     const inc = f ? f.include[g.id] !== false : true;
     if (!inc) return false;
+
+    // Standalone group: individual columns only, no sub-header and no sub-total column.
+    if (g.standalone) {
+      getItems(g.id)
+        .filter((it) => !f || !f.hiddenItems[it.id])
+        .forEach((it) =>
+          cols.push({
+            id: it.id, label: it.label, section: g.section, sub: null, kind: 'input',
+            groupId: g.id, removeId: it.custom ? it.id : undefined,
+          }),
+        );
+      return true;
+    }
+
     const mode: Mode = f ? f.mode[g.id] || 'all' : 'all';
     const items =
       mode === 'all' ? getItems(g.id).filter((it) => !f || !f.hiddenItems[it.id]) : [];
@@ -338,7 +384,7 @@ const buildHeader = (cols: Col[]): { r1: HCell[]; r2: HCell[]; r3: HCell[] } => 
       rowSpan: sec === 'remarks' ? 3 : 1,
       section: sec,
       tone: 'section',
-      addGroupId: sec === 'recycle' ? 'recycle' : undefined,
+      addGroupId: sec === 'recycle' ? 'recycle' : sec === 'haz' ? 'hazother' : undefined,
     });
     i = j;
   }
@@ -419,6 +465,7 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
   const [filters, setFilters] = useState<Filters>(makeDefaultFilters());
   const [loadedKey, setLoadedKey] = useState<string>('');
   const [filterOpen, setFilterOpen] = useState(false);
+  const [dialog, setDialog] = useState<AddDialog | null>(null);
   const filterRef = useRef<HTMLDivElement | null>(null);
 
   const unitInfo = useMemo(() => resolveUnit(unit), [unit]);
@@ -525,14 +572,31 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
     setData((prev) => ({ ...prev, [String(mi)]: { ...(prev[String(mi)] || {}), [id]: value } }));
   };
 
+  const pushCustomItem = (gid: string, label: string) => {
+    const id = `${gid}_c_${Date.now()}`;
+    setCustom((prev) => ({ ...prev, [gid]: [...(prev[gid] || []), { id, label, custom: true }] }));
+  };
+
   const addItem = (gid: string) => {
     const g = GROUP_MAP[gid];
     if (!g) return;
+    // Recycle / Reuse uses a dialog with a Recycle | Reuse dropdown selector.
+    if (gid === 'recycle') {
+      setDialog({ gid, name: '', type: 'Recycle' });
+      return;
+    }
     const name = window.prompt(`Enter new item name for "${g.title}"`);
     const label = (name || '').trim();
     if (!label) return;
-    const id = `${gid}_c_${Date.now()}`;
-    setCustom((prev) => ({ ...prev, [gid]: [...(prev[gid] || []), { id, label, custom: true }] }));
+    pushCustomItem(gid, label);
+  };
+
+  const confirmDialog = () => {
+    if (!dialog) return;
+    const name = dialog.name.trim();
+    if (!name) return;
+    pushCustomItem(dialog.gid, `${name} (${dialog.type})`);
+    setDialog(null);
   };
 
   const removeItem = (gid: string, id: string) => {
@@ -697,7 +761,9 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
   const renderHeadCell = (c: HCell) => {
     const t = THEMES[c.section];
     const toneCls = c.tone === 'section' ? t.head : c.tone === 'sub' ? t.sub : t.colHead;
-    const showAdd = (c.tone === 'sub' && c.groupId) || c.addGroupId;
+    const subAddable =
+      c.tone === 'sub' && !!c.groupId && GROUP_MAP[c.groupId] && GROUP_MAP[c.groupId].addable !== false;
+    const showAdd = subAddable || !!c.addGroupId;
     const addGid = (c.tone === 'sub' ? c.groupId : c.addGroupId) as string | undefined;
     return (
       <th
@@ -708,7 +774,7 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
       >
         <div className="flex items-center justify-center gap-2">
           <span className="whitespace-normal leading-tight">{c.label}</span>
-          {showAdd && addGid ? (
+          {showAdd && addGid && GROUP_MAP[addGid] ? (
             <button
               type="button"
               onClick={() => addItem(addGid)}
@@ -830,27 +896,31 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
                           {g.includeLabel}
                         </label>
                         <div className={`mt-2 space-y-1 pl-5 text-[11px] ${inc ? 'text-slate-700' : 'text-slate-400'}`}>
-                          <label className="flex cursor-pointer items-start gap-2">
-                            <input
-                              type="radio"
-                              name={`mode_${g.id}`}
-                              disabled={!inc}
-                              checked={mode === 'all'}
-                              onChange={() => setMode(g.id, 'all')}
-                            />
-                            <span>{g.allLabel}</span>
-                          </label>
-                          <label className="flex cursor-pointer items-start gap-2">
-                            <input
-                              type="radio"
-                              name={`mode_${g.id}`}
-                              disabled={!inc}
-                              checked={mode === 'total'}
-                              onChange={() => setMode(g.id, 'total')}
-                            />
-                            <span>{g.totalOnlyLabel}</span>
-                          </label>
-                          {inc && mode === 'all' && (
+                          {!g.standalone && (
+                            <>
+                              <label className="flex cursor-pointer items-start gap-2">
+                                <input
+                                  type="radio"
+                                  name={`mode_${g.id}`}
+                                  disabled={!inc}
+                                  checked={mode === 'all'}
+                                  onChange={() => setMode(g.id, 'all')}
+                                />
+                                <span>{g.allLabel}</span>
+                              </label>
+                              <label className="flex cursor-pointer items-start gap-2">
+                                <input
+                                  type="radio"
+                                  name={`mode_${g.id}`}
+                                  disabled={!inc}
+                                  checked={mode === 'total'}
+                                  onChange={() => setMode(g.id, 'total')}
+                                />
+                                <span>{g.totalOnlyLabel}</span>
+                              </label>
+                            </>
+                          )}
+                          {inc && (g.standalone || mode === 'all') && (
                             <div className="mt-1 space-y-0.5 rounded-md border border-slate-200 bg-white p-2">
                               {getItems(g.id).map((it) => (
                                 <label key={it.id} className="flex cursor-pointer items-center gap-2">
@@ -974,6 +1044,70 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
         Tinted cells are auto-calculated and locked. Numeric entries accept up to 2 decimal places. Custom items can be
         removed with the × button in their column header.
       </p>
+
+      {/* Add Recycle / Reuse item dialog */}
+      {dialog && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setDialog(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add Recycle / Reuse Item"
+            className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-2xl"
+          >
+            <h3 className="mb-3 text-sm font-bold text-slate-800">Add Recycle / Reuse Item</h3>
+
+            <label className="mb-1 block text-[11px] font-semibold text-slate-600">Type</label>
+            <select
+              value={dialog.type}
+              onChange={(e) => setDialog({ ...dialog, type: e.target.value as RecycleType })}
+              className="mb-3 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs shadow-sm outline-none focus:ring-2 focus:border-teal-500 focus:ring-teal-300"
+            >
+              <option value="Recycle">Recycle</option>
+              <option value="Reuse">Reuse</option>
+            </select>
+
+            <label className="mb-1 block text-[11px] font-semibold text-slate-600">Item name</label>
+            <input
+              type="text"
+              autoFocus
+              value={dialog.name}
+              onChange={(e) => setDialog({ ...dialog, name: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') confirmDialog();
+                if (e.key === 'Escape') setDialog(null);
+              }}
+              placeholder="e.g. Cardboard Core"
+              className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs shadow-sm outline-none focus:ring-2 focus:border-teal-500 focus:ring-teal-300"
+            />
+            <p className="mt-1 text-[11px] text-slate-500">
+              Column will be named: {dialog.name.trim() ? `${dialog.name.trim()} (${dialog.type})` : `{Item Name} (${dialog.type})`}
+            </p>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDialog(null)}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDialog}
+                disabled={!dialog.name.trim()}
+                className="rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Add Item
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
