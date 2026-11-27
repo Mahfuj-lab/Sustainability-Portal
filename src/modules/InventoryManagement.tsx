@@ -139,7 +139,7 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({
     icon: Info,
     description: 'Module details not found.'
   };
-if (activeSubModule === 'inv_refrigerant_ods') {
+if (activeSubModule === 'inv_refrigerant') {
   return <RefrigerantOdsForm selectedUnit={selectedUnit} selectedYear={selectedYear} />;
 }
 
