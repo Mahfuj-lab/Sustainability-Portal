@@ -2,7 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Leaf, LogOut, Users, Settings, BarChart3, Zap, Flame, Factory,
   FileSpreadsheet, Save, X, Check, AlertCircle, Menu, Eye, EyeOff, Shield, Plus,
-  ChevronDown, ChevronRight, Box, TrendingUp, Target, Globe, FileCheck, Scale, FolderOpen
+  ChevronDown, ChevronRight, Box, TrendingUp, Target, Globe, FileCheck, Scale, FolderOpen,
+  Home, Droplets, Recycle, Cloud, Fuel, Sun, Cog, Wind, Snowflake, FlaskConical, Truck,
+  Trash2, Waves, Boxes, ClipboardList, Building2, Clock, LayoutGrid, SlidersHorizontal
 } from 'lucide-react';
 import InventoryManagement from './modules/InventoryManagement';
 import SettingsPanel, { THEMES } from './modules/SettingsPanel';
@@ -174,7 +176,7 @@ interface ProductionRow {
 
 const FACTORIES = ['EKWL', 'DKL', 'DDL', 'EKWL-HW', 'ESL', 'ESL-Extention', 'EFL', 'EKL', 'EPL', 'EWL'];
 
-const UNIT_FULL_NAMES: Record<string, string> = {
+const UNIT_DIRECTORY: Record<string, string> = {
   'EKWL': 'Epyllion Knitwears Ltd.',
   'DKL': 'Dekko Knitwears Ltd.',
   'DDL': 'Dazzling Dresses Ltd.',
@@ -186,10 +188,16 @@ const UNIT_FULL_NAMES: Record<string, string> = {
   'EPL': 'Epyllion Limited.',
   'EWL': 'Epyllion Washing Ltd.'
 };
+// Backward-compatible alias used by all module props
+const UNIT_FULL_NAMES = UNIT_DIRECTORY;
+
 const YEARS = [2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030];
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 const DEFAULT_FACTORS: EmissionFactors = { grid_electricity: 0.62, natural_gas: 2.02, diesel: 2.68, petrol_octane: 2.31, cng: 2.02 };
+
+// Net Calorific Value defaults (MJ per unit). Overridden by Settings year-wise NCV factors when found.
+const DEFAULT_NCV: EmissionFactors = { grid_electricity: 3.6, natural_gas: 38.3, diesel: 36.0, petrol_octane: 32.0, cng: 38.3 };
 
 const P_E_FIELDS: { key: keyof EnergyRow; label: string }[] = [
   { key:'pe_meter1_offpeak', label:'PE M1 Off (kWh)' }, { key:'pe_meter1_peak', label:'PE M1 Peak (kWh)' },
@@ -333,11 +341,31 @@ const MODULES = [
 
 ];
 
+// Icons for the Quick-Launch Inventory cards
+const INVENTORY_ICONS: Record<string, any> = {
+  inv_production_operations: Factory,
+  inv_electricity_solar: Sun,
+  inv_fuel_vehicles: Fuel,
+  inv_steam_boiler: Cog,
+  inv_water_withdrawal: Droplets,
+  inv_wastewater_etp: Waves,
+  inv_solid_waste: Recycle,
+  inv_air_emission: Wind,
+  inv_refrigerant: Snowflake,
+  inv_chemical: FlaskConical,
+  inv_transport: Truck,
+  inv_ghg_summary: Cloud,
+};
+
 // ============================================================
 // HELPERS
 // ============================================================
 const n = (v: any): number => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
 const fmt = (v: number, d = 2): string => v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+const safeParse = (s: string | null): any => { if (!s) return null; try { return JSON.parse(s); } catch { return null; } };
+const ssGet = (k: string): string | null => { try { return sessionStorage.getItem(k); } catch { return null; } };
+const ssSet = (k: string, v: string) => { try { sessionStorage.setItem(k, v); } catch {} };
 
 const emptyEnergyRow = (month: string): EnergyRow => ({
   month, pe_meter1_offpeak:0, pe_meter1_peak:0, pe_meter1_flat:0, pe_meter2_offpeak:0, pe_meter2_peak:0, pe_meter2_flat:0,
@@ -376,6 +404,76 @@ const downloadCSV = (filename: string, csv: string) => {
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click();
   document.body.removeChild(a); URL.revokeObjectURL(url);
+};
+
+// ---------- localStorage readers for Dashboard KPIs ----------
+// Normalises many possible stored shapes ({rows:{Jan:{}}}, [{}], {Jan:{}}, {...flat}) into an array of row objects.
+const extractRows = (d: any): any[] => {
+  if (!d) return [];
+  if (Array.isArray(d)) return d.filter(x => x && typeof x === 'object');
+  if (typeof d === 'object') {
+    if (d.rows) return extractRows(d.rows);
+    if (d.data) return extractRows(d.data);
+    const vals = Object.values(d).filter(v => v && typeof v === 'object' && !Array.isArray(v));
+    if (vals.length) return vals as any[];
+    return [d];
+  }
+  return [];
+};
+
+// Looks for `{prefix}_{unit}_{year}` (and a few sibling patterns) in localStorage.
+// If your modules save under a different key, add the pattern to `candidates` below.
+const readStoredModule = (prefix: string, unit: string, year: string | number): any[] => {
+  const candidates = [
+    `${prefix}_${unit}_${year}`,
+    `${prefix}_${year}_${unit}`,
+    `${prefix}:${unit}_${year}`,
+    `${unit}_${year}_${prefix}`,
+    `${prefix}_${unit}_${year}_data`,
+  ];
+  try {
+    for (const k of candidates) {
+      const rows = extractRows(safeParse(localStorage.getItem(k)));
+      if (rows.length) return rows;
+    }
+    const g = safeParse(localStorage.getItem(`${unit}_${year}`));
+    if (g && typeof g === 'object' && g[prefix]) {
+      const rows = extractRows(g[prefix]);
+      if (rows.length) return rows;
+    }
+  } catch {}
+  return [];
+};
+
+const sumFields = (rows: any[], include: RegExp, exclude?: RegExp): number =>
+  rows.reduce((s, r) => s + Object.keys(r || {}).reduce(
+    (a, k) => (include.test(k) && !(exclude && exclude.test(k)) ? a + n(r[k]) : a), 0), 0);
+
+// ---------- Dashboard KPI catalogue ----------
+interface KpiOption { id: string; label: string; unit: string; icon: any; accent: string; iconBg: string; decimals: number; }
+const KPI_OPTIONS: KpiOption[] = [
+  { id: 'electricity', label: 'Total Purchased Electricity', unit: 'kWh', icon: Zap, accent: 'border-amber-300', iconBg: 'bg-amber-50 text-amber-600', decimals: 2 },
+  { id: 'ghg', label: 'Total GHG Footprint', unit: 'Ton CO₂e', icon: Cloud, accent: 'border-slate-300', iconBg: 'bg-slate-100 text-slate-600', decimals: 2 },
+  { id: 'water', label: 'Total Water Withdrawal', unit: 'm³', icon: Droplets, accent: 'border-sky-300', iconBg: 'bg-sky-50 text-sky-600', decimals: 2 },
+  { id: 'recycling', label: 'Waste Recycling Rate', unit: '%', icon: Recycle, accent: 'border-emerald-300', iconBg: 'bg-emerald-50 text-emerald-600', decimals: 2 },
+  { id: 'diesel', label: 'Total Diesel Consumption', unit: 'L', icon: Fuel, accent: 'border-orange-300', iconBg: 'bg-orange-50 text-orange-600', decimals: 2 },
+  { id: 'natural_gas', label: 'Total Natural Gas', unit: 'm³', icon: Flame, accent: 'border-rose-300', iconBg: 'bg-rose-50 text-rose-600', decimals: 2 },
+  { id: 'energy_mj', label: 'Total Energy Consumption', unit: 'MJ', icon: BarChart3, accent: 'border-violet-300', iconBg: 'bg-violet-50 text-violet-600', decimals: 2 },
+  { id: 'production', label: 'Total Production Quantity', unit: 'pcs', icon: Boxes, accent: 'border-teal-300', iconBg: 'bg-teal-50 text-teal-600', decimals: 2 },
+];
+const DEFAULT_KPI_SELECTION = ['electricity', 'ghg', 'water', 'recycling'];
+
+// ---------- Unit status strip (Higg FEM 4.0 / SBTi / GRI) ----------
+interface UnitStatus { higg_fem: string; sbti: string; gri: string; }
+const HIGG_OPTIONS = ['Not Started', 'In Progress', 'Self-Assessment Submitted', 'Verified'];
+const SBTI_OPTIONS = ['Not Committed', 'Committed', 'Targets Submitted', 'Targets Validated'];
+const GRI_OPTIONS = ['Not Reported', 'Reporting With Reference', 'Reporting In Accordance'];
+const DEFAULT_STATUS: UnitStatus = { higg_fem: HIGG_OPTIONS[0], sbti: SBTI_OPTIONS[0], gri: GRI_OPTIONS[0] };
+const statusTone = (opts: string[], v: string) => {
+  const i = opts.indexOf(v);
+  if (i <= 0) return 'bg-gray-100 text-gray-600 border-gray-200';
+  if (i === opts.length - 1) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+  return 'bg-amber-100 text-amber-700 border-amber-200';
 };
 
 // ============================================================
@@ -431,6 +529,171 @@ const DataTable: React.FC<DataTableProps> = ({ title, subtitle, rows, fields, ca
 );
 
 // ============================================================
+// EXECUTIVE HOME DASHBOARD
+// ============================================================
+interface DashboardHomeProps {
+  unit: string;
+  year: number;
+  kpiValues: Record<string, number>;
+  kpiSelection: string[];
+  onKpiSlotChange: (slot: number, id: string) => void;
+  onLaunch: (subModuleId: string) => void;
+  status: UnitStatus;
+  onStatusChange: (key: keyof UnitStatus, value: string) => void;
+  canEdit: boolean;
+}
+
+const DashboardHome: React.FC<DashboardHomeProps> = ({
+  unit, year, kpiValues, kpiSelection, onKpiSlotChange, onLaunch, status, onStatusChange, canEdit
+}) => {
+  const [customOpen, setCustomOpen] = useState(false);
+  const [logoOk, setLogoOk] = useState(true);
+  let brandLogo = '/epyllion-logo.png';
+  try { brandLogo = localStorage.getItem('corporate_brand_logo') || '/epyllion-logo.png'; } catch {}
+
+  const inventory = MODULES.find(m => m.id === 'inventory_mgmt');
+
+  const statusItems: { key: keyof UnitStatus; title: string; opts: string[] }[] = [
+    { key: 'higg_fem', title: 'Higg FEM 4.0', opts: HIGG_OPTIONS },
+    { key: 'sbti', title: 'SBTi', opts: SBTI_OPTIONS },
+    { key: 'gri', title: 'GRI Reporting', opts: GRI_OPTIONS },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* HERO CORPORATE BANNER */}
+      <section className="rounded-2xl bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-600 text-white p-5 sm:p-7 shadow-lg relative overflow-hidden">
+        <div className="absolute -right-10 -top-10 w-56 h-56 rounded-full bg-white/10" />
+        <div className="absolute right-24 -bottom-16 w-48 h-48 rounded-full bg-white/5" />
+        <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
+          <div className="shrink-0 bg-white rounded-xl p-3 shadow-md w-36 h-20 flex items-center justify-center">
+            {logoOk ? (
+              <img src={brandLogo} alt="Epyllion Group" className="max-h-full max-w-full object-contain" onError={() => setLogoOk(false)} />
+            ) : (
+              <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-sm"><Leaf size={18} /> Epyllion</div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl sm:text-2xl font-bold leading-tight">Epyllion Sustainability &amp; ESG Portal</h2>
+            <p className="text-xs sm:text-sm text-emerald-50/90 mt-1">Centralized Environmental Inventory, Compliance &amp; Sustainability Data Centre</p>
+            <div className="mt-3 inline-flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/25 text-[11px] font-semibold">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-200"></span>
+                </span>
+                <Building2 size={12} /> {unit} - {UNIT_DIRECTORY[unit] || unit}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/25 text-[11px] font-semibold">
+                <Clock size={12} /> FY {year}
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* LIVE KPI GRID */}
+      <section>
+        <div className="flex items-center justify-between mb-3 relative">
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">Live Key Performance Indicators</h3>
+            <p className="text-[11px] text-gray-500">Auto-synced from saved data for {unit} • FY {year}</p>
+          </div>
+          <div className="relative">
+            <button onClick={() => setCustomOpen(o => !o)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-emerald-50 text-xs font-semibold text-gray-700 shadow-sm">
+              <SlidersHorizontal size={13} /> Customize 4 Cards <ChevronDown size={13} />
+            </button>
+            {customOpen && (
+              <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-20 p-3 space-y-2">
+                <p className="text-[11px] text-gray-500">Choose the metric shown in each card slot.</p>
+                {kpiSelection.map((sel, slot) => (
+                  <div key={slot}>
+                    <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Card {slot + 1}</label>
+                    <select value={sel} onChange={e => onKpiSlotChange(slot, e.target.value)}
+                      className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400">
+                      {KPI_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label} ({o.unit})</option>)}
+                    </select>
+                  </div>
+                ))}
+                <button onClick={() => setCustomOpen(false)} className="w-full mt-1 px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold flex items-center justify-center gap-1">
+                  <Check size={13} /> Done
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {kpiSelection.map((id, i) => {
+            const opt = KPI_OPTIONS.find(o => o.id === id) || KPI_OPTIONS[0];
+            const Icon = opt.icon;
+            return (
+              <div key={`${id}-${i}`} className={`bg-white rounded-xl border-l-4 ${opt.accent} border-y border-r border-gray-200 shadow-sm p-4 flex items-start gap-3`}>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${opt.iconBg}`}><Icon size={20} /></div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold text-gray-500 leading-tight">{opt.label}</p>
+                  <p className="text-xl font-bold text-gray-800 mt-1 truncate">{fmt(kpiValues[opt.id] || 0, opt.decimals)}</p>
+                  <p className="text-[10px] text-gray-400 font-medium">{opt.unit}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* QUICK-LAUNCH INVENTORY CARDS */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <LayoutGrid size={15} className="text-emerald-600" />
+          <h3 className="text-sm font-bold text-gray-800">Quick-Launch Inventory Modules</h3>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+          {(inventory?.subModules || []).map(sub => {
+            const Icon = INVENTORY_ICONS[sub.id] || ClipboardList;
+            return (
+              <button key={sub.id} onClick={() => onLaunch(sub.id)}
+                className="group text-left bg-white rounded-xl border border-gray-200 hover:border-emerald-300 hover:shadow-md transition-all p-3.5 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors flex items-center justify-center shrink-0">
+                  <Icon size={17} />
+                </div>
+                <span className="text-xs font-semibold text-gray-700 leading-snug flex-1">{sub.label}</span>
+                <ChevronRight size={14} className="text-gray-300 group-hover:text-emerald-500" />
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* HIGG FEM / SBTi / GRI STATUS STRIP */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <Shield size={15} className="text-emerald-600" />
+          <h3 className="text-sm font-bold text-gray-800">Framework Status • {unit} • FY {year}</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {statusItems.map(item => {
+            const value = status[item.key];
+            return (
+              <div key={item.key} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{item.title}</p>
+                {canEdit ? (
+                  <select value={value} onChange={e => onStatusChange(item.key, e.target.value)}
+                    className={`mt-2 w-full text-xs font-semibold px-2.5 py-1.5 rounded-lg border focus:outline-none ${statusTone(item.opts, value)}`}>
+                    {item.opts.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                ) : (
+                  <span className={`mt-2 inline-block text-xs font-semibold px-2.5 py-1 rounded-full border ${statusTone(item.opts, value)}`}>{value}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+};
+
+// ============================================================
 // MAIN APP
 // ============================================================
 const App: React.FC = () => {
@@ -438,16 +701,30 @@ const App: React.FC = () => {
   const [bootLoading, setBootLoading] = useState(true);
   const [logoUrl, setLogoUrl] = useState('');
   const [factors, setFactors] = useState<EmissionFactors>(DEFAULT_FACTORS);
-  const [factory, setFactory] = useState('EKWL');
-  const [year, setYear] = useState(2027);
-    const [currentTheme, setCurrentTheme] = useState<ThemeKey>(() => {
+
+  // Unit & Year persisted in sessionStorage so a browser refresh never resets them
+  const [factory, setFactory] = useState<string>(() => {
+    const v = ssGet('selectedUnit');
+    return v && FACTORIES.includes(v) ? v : 'EKWL';
+  });
+  const [year, setYear] = useState<number>(() => {
+    const v = parseInt(ssGet('selectedYear') || '', 10);
+    if (YEARS.includes(v)) return v;
+    const cy = new Date().getFullYear();
+    return YEARS.includes(cy) ? cy : 2026;
+  });
+  useEffect(() => { ssSet('selectedUnit', factory); }, [factory]);
+  useEffect(() => { ssSet('selectedYear', String(year)); }, [year]);
+
+  const [currentTheme, setCurrentTheme] = useState<ThemeKey>(() => {
     return (localStorage.getItem('portal_theme') as ThemeKey) || 'emerald';
   });
-   const themeConfig = THEMES.find(t => t.id === currentTheme) || THEMES[0];
+  const themeConfig = THEMES.find(t => t.id === currentTheme) || THEMES[0];
   
-  const [activeModule, setActiveModule] = useState<string>('factory_profile_overview');
+  // Home Dashboard is the landing page; accordions start collapsed
+  const [activeModule, setActiveModule] = useState<string>('dashboard');
   const [expandedModules, setExpandedModules] = useState<string[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => typeof window === 'undefined' ? true : window.innerWidth >= 768);
 
   const [energyRows, setEnergyRows] = useState<EnergyRow[]>([]);
   const [prodRows, setProdRows] = useState<ProductionRow[]>([]);
@@ -484,7 +761,7 @@ const App: React.FC = () => {
 
   const userAllowedModules = useMemo(() => {
     if (!user) return [];
-       return MODULES.flatMap(m => [m.id, ...m.subModules.map(s => s.id)]);
+       return ['dashboard', ...MODULES.flatMap(m => [m.id, ...m.subModules.map(s => s.id)])];
 
   }, [user, isSuper]);
 
@@ -501,7 +778,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!user) return;
     if (!userAllowedModules.includes(activeModule) && activeModule !== 'settings' && activeModule !== 'user_management' && activeModule !== 'excel_export') {
-      setActiveModule('factory_profile_overview');
+      setActiveModule('dashboard');
     }
   }, [user, userAllowedModules, activeModule]);
 
@@ -553,7 +830,7 @@ const App: React.FC = () => {
     setProdRows(prev => { const c = [...prev]; (c[mi] as any)[key] = val === '' ? 0 : n(val); return c; });
   };
 
-  const logout = () => { localStorage.removeItem('sp_session'); setUser(null); };
+  const logout = () => { localStorage.removeItem('sp_session'); setUser(null); setActiveModule('dashboard'); setExpandedModules([]); };
 
   const toggleExpand = (id: string) => {
     setExpandedModules(prev => 
@@ -586,6 +863,134 @@ const App: React.FC = () => {
       energyPerPcs: totalProdPcs > 0 ? (totalPEkWh+totalSolar+totalGenkWh)/totalProdPcs : 0,
     };
   }, [energyRows, prodRows, factors]);
+
+  // ---------- DASHBOARD: KPI selection (4 slots, persisted) ----------
+  const [kpiSelection, setKpiSelection] = useState<string[]>(() => {
+    const s = safeParse(localStorage.getItem('dashboard_kpi_selection'));
+    if (Array.isArray(s) && s.length === 4 && new Set(s).size === 4 && s.every((x: any) => KPI_OPTIONS.some(o => o.id === x))) return s;
+    return DEFAULT_KPI_SELECTION;
+  });
+  const changeKpiSlot = (slot: number, id: string) => {
+    setKpiSelection(prev => {
+      const next = [...prev];
+      const existing = next.indexOf(id);
+      if (existing >= 0 && existing !== slot) next[existing] = next[slot]; // swap so there are never duplicates
+      next[slot] = id;
+      try { localStorage.setItem('dashboard_kpi_selection', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  // ---------- DASHBOARD: year-wise NCV factors from Settings ----------
+  const [ncv, setNcv] = useState<EmissionFactors>(DEFAULT_NCV);
+  useEffect(() => {
+    let cancelled = false;
+    const pick = (src: any): EmissionFactors | null => {
+      if (!src || typeof src !== 'object') return null;
+      const byYear = src[String(year)] || src[year];
+      const o = byYear && typeof byYear === 'object' ? byYear : src;
+      const out: EmissionFactors = { ...DEFAULT_NCV };
+      let found = false;
+      (Object.keys(DEFAULT_NCV) as (keyof EmissionFactors)[]).forEach(k => {
+        if (n(o[k]) > 0) { out[k] = n(o[k]); found = true; }
+      });
+      return found ? out : null;
+    };
+    (async () => {
+      const local = pick(safeParse(localStorage.getItem(`ncv_factors_${year}`))) || pick(safeParse(localStorage.getItem('ncv_factors')));
+      if (local) { if (!cancelled) setNcv(local); return; }
+      try {
+        const remote = pick(await restGet('settings/ncv_factors'));
+        if (!cancelled) setNcv(remote || DEFAULT_NCV);
+      } catch { if (!cancelled) setNcv(DEFAULT_NCV); }
+    })();
+    return () => { cancelled = true; };
+  }, [year]);
+
+  // ---------- DASHBOARD: unit status strip (Higg FEM 4.0, SBTi, GRI) ----------
+  const [unitStatus, setUnitStatus] = useState<UnitStatus>(DEFAULT_STATUS);
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const local = safeParse(localStorage.getItem(`unit_status_${factory}_${year}`));
+      if (local && typeof local === 'object') { if (!cancelled) setUnitStatus({ ...DEFAULT_STATUS, ...local }); return; }
+      try {
+        const remote = await restGet(`unit_status/${factory}_${year}`);
+        if (!cancelled) setUnitStatus(remote ? {
+          higg_fem: remote.higg_fem || DEFAULT_STATUS.higg_fem,
+          sbti: remote.sbti || DEFAULT_STATUS.sbti,
+          gri: remote.gri || DEFAULT_STATUS.gri,
+        } : DEFAULT_STATUS);
+      } catch { if (!cancelled) setUnitStatus(DEFAULT_STATUS); }
+    })();
+    return () => { cancelled = true; };
+  }, [user, factory, year]);
+
+  const changeUnitStatus = async (key: keyof UnitStatus, value: string) => {
+    if (!canEdit) return;
+    const next = { ...unitStatus, [key]: value };
+    setUnitStatus(next);
+    try { localStorage.setItem(`unit_status_${factory}_${year}`, JSON.stringify(next)); } catch {}
+    try { await restSet('unit_status', `${factory}_${year}`, { factory, year, ...next }); } catch {}
+  };
+
+  // ---------- DASHBOARD: live KPI values ----------
+  // Reads localStorage for {unit}_{year} first; falls back to Firestore-loaded rows; final fallback is 0.
+  const kpiValues = useMemo<Record<string, number>>(() => {
+    if (activeModule !== 'dashboard') return {};
+    const u = factory, y = year;
+    const lsElec = readStoredModule('inv_electricity_solar', u, y);
+    const lsFuel = readStoredModule('inv_fuel_vehicles', u, y);
+    const lsProd = readStoredModule('inv_production_operations', u, y);
+    const lsWater = readStoredModule('inv_water_withdrawal', u, y);
+    const lsWaste = readStoredModule('inv_solid_waste', u, y);
+
+    const elecRows: any[] = lsElec.length ? lsElec : energyRows;
+    const fuelRows: any[] = lsFuel.length ? lsFuel : energyRows;
+    const prRows: any[] = lsProd.length ? lsProd : prodRows;
+
+    const peKWh = elecRows.reduce((s, r) => s + rowTotalPE(r), 0);
+    const solarKWh = elecRows.reduce((s, r) => s + n(r.solar_meter1_kwh) + n(r.solar_meter2_kwh), 0);
+    const ngM3 = fuelRows.reduce((s, r) => s + rowTotalNG(r), 0);
+    const dieselL = fuelRows.reduce((s, r) => s + rowTotalDiesel(r), 0);
+    const vehDiesel = fuelRows.reduce((s, r) => s + n(r.vehicle_diesel_l), 0);
+    const vehCNG = fuelRows.reduce((s, r) => s + n(r.vehicle_cng_m3), 0);
+    const vehOctane = fuelRows.reduce((s, r) => s + n(r.vehicle_octane_l), 0);
+    const pcs = prRows.reduce((s, r) => s + rowTotalProductionPcs(r), 0);
+
+    const ghgKg = peKWh * factors.grid_electricity + ngM3 * factors.natural_gas + dieselL * factors.diesel
+      + vehDiesel * factors.diesel + vehCNG * factors.cng + vehOctane * factors.petrol_octane;
+
+    const energyMJ = (peKWh + solarKWh) * ncv.grid_electricity + ngM3 * ncv.natural_gas
+      + (dieselL + vehDiesel) * ncv.diesel + vehCNG * ncv.cng + vehOctane * ncv.petrol_octane;
+
+    // Water: prefer an explicit total field, otherwise sum the individual m³ source fields
+    let water = sumFields(lsWater, /(total.*(m3|m³|withdraw))|(withdraw.*total)/i, /bdt|cost/i);
+    if (!water) water = sumFields(lsWater, /(m3|m³|withdraw|ground|municipal|surface|rain)/i, /bdt|cost|total|month|recycl|reuse/i);
+
+    // Waste recycling rate = recycled / total generated × 100
+    const recycled = sumFields(lsWaste, /recycl|reuse/i, /bdt|cost|rate|percent|%/i);
+    let generated = sumFields(lsWaste, /(total|generat)/i, /bdt|cost|rate|percent|recycl/i);
+    if (!generated) generated = sumFields(lsWaste, /./, /bdt|cost|rate|percent|month|id|year/i);
+    const recyclingRate = generated > 0 ? Math.min(100, (recycled / generated) * 100) : 0;
+
+    return {
+      electricity: peKWh,
+      ghg: ghgKg / 1000,
+      water,
+      recycling: recyclingRate,
+      diesel: dieselL,
+      natural_gas: ngM3,
+      energy_mj: energyMJ,
+      production: pcs,
+    };
+  }, [activeModule, factory, year, energyRows, prodRows, factors, ncv]);
+
+  const launchInventory = (subId: string) => {
+    setExpandedModules(prev => prev.includes('inventory_mgmt') ? prev : [...prev, 'inventory_mgmt']);
+    setActiveModule(subId);
+  };
 
   const [exportModule, setExportModule] = useState('purchase_electricity');
   const [exportCols, setExportCols] = useState<string[]>([]);
@@ -681,13 +1086,14 @@ const App: React.FC = () => {
   if (bootLoading) return <div className="min-h-screen flex items-center justify-center bg-white"><div className="animate-pulse text-emerald-600 text-sm">Loading...</div></div>;
   if (!user) return <LoginScreen onLogin={setUser} />;
 
-  return (    <div className={`min-h-screen flex flex-col transition-colors duration-300 ${themeConfig.pageBg}`}>
+  return (
+    <div className={`h-screen flex flex-col transition-colors duration-300 ${themeConfig.pageBg}`}>
       {/* HEADER */}
-      <header className={`${themeConfig.headerBg} ${themeConfig.sidebarText} border-b sticky top-0 z-40 transition-colors duration-300`}>
+      <header className={`${themeConfig.headerBg} ${themeConfig.sidebarText} border-b shrink-0 z-40 transition-colors duration-300`}>
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-500 hover:text-emerald-600"><Menu size={20} /></button>
-            <div className="flex items-center gap-2">
+            <button onClick={() => setActiveModule('dashboard')} className="flex items-center gap-2 text-left" title="Home Dashboard">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-sm">
                 <Leaf className="text-white" size={18} />
               </div>
@@ -695,7 +1101,7 @@ const App: React.FC = () => {
                 <h1 className="text-sm font-bold text-gray-800 leading-tight">Sustainability</h1>
                 <p className="text-[10px] text-emerald-600 font-medium">Portal</p>
               </div>
-            </div>
+            </button>
           </div>
           
           <div className="flex items-center gap-2 sm:gap-3">
@@ -709,8 +1115,9 @@ const App: React.FC = () => {
                 {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-xs font-semibold text-gray-800">{user.full_name}</span>
+            {/* Dynamic logged-in user badge (name + role from auth state) */}
+            <div className="flex flex-col items-end max-w-[120px] sm:max-w-none">
+              <span className="text-xs font-semibold text-gray-800 truncate max-w-full">{user.full_name}</span>
               <span className="text-[10px] text-emerald-600 uppercase">{user.role.replace('_',' ')}</span>
             </div>
             <button onClick={logout} title="Logout" className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-600"><LogOut size={18} /></button>
@@ -727,11 +1134,19 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* SIDEBAR */}
         {sidebarOpen && (
-          <aside className={`w-64 ${themeConfig.sidebarBg} ${themeConfig.sidebarText} border-r flex flex-col h-[calc(100vh-61px)] overflow-y-auto hidden md:flex transition-colors duration-300`}>
+          <aside className={`w-64 shrink-0 ${themeConfig.sidebarBg} ${themeConfig.sidebarText} border-r flex-col h-full overflow-y-auto hidden md:flex transition-colors duration-300`}>
             <nav className="p-3 space-y-1 flex-1">
+              {/* HOME DASHBOARD */}
+              <button onClick={() => setActiveModule('dashboard')}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-colors ${
+                  activeModule === 'dashboard' ? 'bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200' : 'text-gray-600 hover:bg-gray-50'
+                }`}>
+                <Home size={16} className={activeModule === 'dashboard' ? 'text-emerald-600' : 'text-gray-400'} />
+                <span className="flex-1">Dashboard</span>
+              </button>
               {MODULES.map(m => {
                 const Icon = m.icon;
                 const isExpanded = expandedModules.includes(m.id);
@@ -803,6 +1218,12 @@ const App: React.FC = () => {
                 <button onClick={() => setSidebarOpen(false)}><X size={18} /></button>
               </div>
               <nav className="p-3 space-y-1 flex-1">
+                <button onClick={() => { setActiveModule('dashboard'); setSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm ${
+                    activeModule === 'dashboard' ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'
+                  }`}>
+                  <Home size={16} className={activeModule === 'dashboard' ? 'text-emerald-600' : 'text-gray-400'} /><span>Dashboard</span>
+                </button>
                 {MODULES.map(m => {
                   const Icon = m.icon;
                   const isExpanded = expandedModules.includes(m.id);
@@ -864,20 +1285,35 @@ const App: React.FC = () => {
         )}
 
         {/* MAIN CONTENT AREA */}
-        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
-                    <div className="mb-6 bg-white/50 backdrop-blur-sm rounded-xl p-4 border border-gray-200/60 shadow-sm flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-gray-800">
-                {UNIT_FULL_NAMES[factory] || factory}
-              </h1>
-              <p className="text-xs text-gray-500 mt-1 font-medium tracking-wide uppercase">
-                Sustainability Portal &bull; {year}
-              </p>
+        <main className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto">
+          {activeModule === 'dashboard' ? (
+            <DashboardHome
+              unit={factory}
+              year={year}
+              kpiValues={kpiValues}
+              kpiSelection={kpiSelection}
+              onKpiSlotChange={changeKpiSlot}
+              onLaunch={launchInventory}
+              status={unitStatus}
+              onStatusChange={changeUnitStatus}
+              canEdit={canEdit}
+            />
+          ) : (
+            <div className="mb-6 bg-white/50 backdrop-blur-sm rounded-xl p-4 border border-gray-200/60 shadow-sm flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-bold text-gray-800">
+                  {UNIT_FULL_NAMES[factory] || factory}
+                </h1>
+                <p className="text-xs text-gray-500 mt-1 font-medium tracking-wide uppercase">
+                  Sustainability Portal &bull; {year}
+                </p>
+              </div>
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-100 font-semibold text-xs">
+                Active Unit: {factory}
+              </div>
             </div>
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-100 font-semibold text-xs">
-              Active Unit: {factory}
-            </div>
-          </div>
+          )}
+
           {activeModule === 'excel_export' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
               <h2 className="text-sm font-bold text-gray-800">Custom Excel Export (CSV)</h2>
@@ -1233,8 +1669,9 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <footer className="text-center text-[11px] text-gray-400 py-4 border-t border-gray-100 bg-white mt-auto">
-        © 2027 Sustainability Portal • Designed &amp; Developed by Md. Mahfuj Rahman Rasel | Support: +880 1705-472581
+      {/* PERMANENT DEVELOPER CREDIT & SUPPORT FOOTER */}
+      <footer className="shrink-0 text-center text-[11px] text-gray-400 py-3 border-t border-gray-100 bg-white">
+        © 2026 Sustainability Portal • Designed &amp; Developed by Md. Mahfuj Rahman Rasel | Support: +880 1705-472581
       </footer>
     </div>
   );
@@ -1351,7 +1788,7 @@ const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void }> = ({ onLogin }
         </div>
       </div>
       <footer className="text-center text-[11px] text-gray-400 py-5 border-t border-gray-100">
-        © 2027 Sustainability Portal • Designed &amp; Developed by Md. Mahfuj Rahman Rasel
+        © 2026 Sustainability Portal • Designed &amp; Developed by Md. Mahfuj Rahman Rasel | Support: +880 1705-472581
       </footer>
     </div>
   );
