@@ -36,6 +36,86 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+// ---------------------------------------------------------------------------
+// Design system: one theme per section (all class strings are literal so
+// Tailwind can detect them).
+// ---------------------------------------------------------------------------
+interface SectionTheme {
+  groupHeader: string; // top group header cell
+  subHeader: string;   // name / column header cells
+  subHeaderSoft: string; // third-row header cells
+  tint: string;        // body column tint
+  tintStrong: string;  // body tint for calculated totals column
+  locked: string;      // read-only locked / calculated box
+  footer: string;      // footer cells
+  footerStrong: string;
+  input: string;       // editable input focus styling
+  nameInput: string;   // header name input focus styling
+}
+
+const THEMES: Record<'generator' | 'boiler' | 'compressor' | 'remarks', SectionTheme> = {
+  generator: {
+    groupHeader: 'bg-emerald-200 text-emerald-900 border-emerald-300',
+    subHeader: 'bg-emerald-100 text-emerald-900 border-emerald-200',
+    subHeaderSoft: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    tint: 'bg-emerald-50/70',
+    tintStrong: 'bg-emerald-100/70',
+    locked: 'bg-emerald-100 border-emerald-300 text-emerald-900',
+    footer: 'bg-emerald-50 text-emerald-900 border-emerald-200',
+    footerStrong: 'bg-emerald-200 text-emerald-950 border-emerald-300',
+    input: 'focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200',
+    nameInput: 'focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200',
+  },
+  boiler: {
+    groupHeader: 'bg-sky-200 text-sky-900 border-sky-300',
+    subHeader: 'bg-sky-100 text-sky-900 border-sky-200',
+    subHeaderSoft: 'bg-sky-50 text-sky-800 border-sky-200',
+    tint: 'bg-sky-50/70',
+    tintStrong: 'bg-sky-100/70',
+    locked: 'bg-sky-100 border-sky-300 text-sky-900',
+    footer: 'bg-sky-50 text-sky-900 border-sky-200',
+    footerStrong: 'bg-sky-200 text-sky-950 border-sky-300',
+    input: 'focus:border-sky-600 focus:ring-2 focus:ring-sky-200',
+    nameInput: 'focus:border-sky-600 focus:ring-2 focus:ring-sky-200',
+  },
+  compressor: {
+    groupHeader: 'bg-amber-200 text-amber-900 border-amber-300',
+    subHeader: 'bg-amber-100 text-amber-900 border-amber-200',
+    subHeaderSoft: 'bg-amber-50 text-amber-800 border-amber-200',
+    tint: 'bg-amber-50/70',
+    tintStrong: 'bg-amber-100/70',
+    locked: 'bg-amber-100 border-amber-300 text-amber-900',
+    footer: 'bg-amber-50 text-amber-900 border-amber-200',
+    footerStrong: 'bg-amber-200 text-amber-950 border-amber-300',
+    input: 'focus:border-amber-600 focus:ring-2 focus:ring-amber-200',
+    nameInput: 'focus:border-amber-600 focus:ring-2 focus:ring-amber-200',
+  },
+  remarks: {
+    groupHeader: 'bg-slate-200 text-slate-800 border-slate-300',
+    subHeader: 'bg-slate-100 text-slate-800 border-slate-200',
+    subHeaderSoft: 'bg-slate-50 text-slate-700 border-slate-200',
+    tint: 'bg-slate-50/80',
+    tintStrong: 'bg-slate-100/80',
+    locked: 'bg-slate-100 border-slate-300 text-slate-800',
+    footer: 'bg-slate-50 text-slate-700 border-slate-200',
+    footerStrong: 'bg-slate-200 text-slate-900 border-slate-300',
+    input: 'focus:border-slate-500 focus:ring-2 focus:ring-slate-200',
+    nameInput: 'focus:border-slate-500 focus:ring-2 focus:ring-slate-200',
+  },
+};
+
+const INPUT_BASE =
+  'w-full min-w-[4.5rem] border border-slate-300 bg-white rounded px-2 py-1 text-right text-xs text-slate-800 outline-none transition disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed';
+
+const NAME_INPUT_BASE =
+  'w-full border border-slate-300 bg-white rounded px-2 py-1 text-center text-xs font-semibold text-slate-800 outline-none transition disabled:bg-transparent disabled:border-transparent disabled:text-slate-800';
+
+const LOCKED_BASE =
+  'w-full min-w-[4.5rem] px-2 py-1 text-right text-xs font-bold rounded border flex items-center justify-end gap-1';
+
+const CELL = 'px-1.5 py-1.5 border-b border-r border-slate-200';
+const TH = 'px-2 py-2 border-b border-r text-center text-xs font-semibold whitespace-nowrap';
+
 const n = (val: any): number => {
   const num = parseFloat(val);
   return isNaN(num) ? 0 : num;
@@ -652,8 +732,39 @@ export default function BoilerGeneratorCompressorForm({
     }
   };
 
+  // -------------------------------------------------------------------------
+  // Render helpers (presentation only)
+  // -------------------------------------------------------------------------
+  const G = THEMES.generator;
+  const B = THEMES.boiler;
+  const C = THEMES.compressor;
+  const R = THEMES.remarks;
+
+  const lockedBox = (t: SectionTheme, content: React.ReactNode, withIcon: boolean = false) => (
+    <div className={`${LOCKED_BASE} ${t.locked}`}>
+      {content}
+      {withIcon && <Lock size={10} className="opacity-60 shrink-0" />}
+    </div>
+  );
+
+  const numInput = (
+    t: SectionTheme,
+    value: string,
+    onChange: (v: string) => void,
+  ) => (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={isViewer}
+      className={`${INPUT_BASE} ${t.input}`}
+    />
+  );
+
   return (
-    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm">
+    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-2xl shadow-md border border-slate-200">
+      {/* Page header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Boiler, Generator &amp; Compressor</h1>
@@ -663,7 +774,7 @@ export default function BoilerGeneratorCompressorForm({
               Reporting Year: {safeYear}
             </span>
             {syncStatus.ngDiesel && syncStatus.elecSolar ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-100 text-sky-800 border border-sky-200">
                 <CheckCircle2 size={12} /> Live Sync Active (NG/Diesel + Elec)
               </span>
             ) : (
@@ -705,24 +816,25 @@ export default function BoilerGeneratorCompressorForm({
         </div>
       </div>
 
+      {/* Section filters */}
       <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-wrap items-center gap-4 text-sm no-print">
         <span className="font-semibold text-slate-700 mr-2">Report Columns / Sections:</span>
         
         <label className="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" checked={sections.generator} onChange={() => setSections(p => ({...p, generator: !p.generator}))} className="accent-emerald-600 w-4 h-4" />
-          <span>Generator Data</span>
+          <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs font-semibold">Generator Data</span>
         </label>
         <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.boiler} onChange={() => setSections(p => ({...p, boiler: !p.boiler}))} className="accent-blue-600 w-4 h-4" />
-          <span>Boiler Data</span>
+          <input type="checkbox" checked={sections.boiler} onChange={() => setSections(p => ({...p, boiler: !p.boiler}))} className="accent-sky-600 w-4 h-4" />
+          <span className="px-2 py-0.5 rounded bg-sky-100 text-sky-900 border border-sky-200 text-xs font-semibold">Boiler Data</span>
         </label>
         <label className="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" checked={sections.compressor} onChange={() => setSections(p => ({...p, compressor: !p.compressor}))} className="accent-amber-600 w-4 h-4" />
-          <span>Compressor</span>
+          <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 text-xs font-semibold">Compressor</span>
         </label>
         <label className="flex items-center gap-1.5 cursor-pointer">
-          <input type="checkbox" checked={sections.remarks} onChange={() => setSections(p => ({...p, remarks: !p.remarks}))} className="accent-gray-600 w-4 h-4" />
-          <span>Remarks</span>
+          <input type="checkbox" checked={sections.remarks} onChange={() => setSections(p => ({...p, remarks: !p.remarks}))} className="accent-slate-600 w-4 h-4" />
+          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-300 text-xs font-semibold">Remarks</span>
         </label>
       </div>
 
@@ -732,117 +844,140 @@ export default function BoilerGeneratorCompressorForm({
         </div>
       )}
 
-      <div className="overflow-x-auto border border-slate-200 rounded-lg">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-600 font-semibold">
+      {/* Table */}
+      <div className="overflow-x-auto border border-slate-300 rounded-xl shadow-sm">
+        <table className="w-full text-sm text-left border-separate border-spacing-0">
+          <thead>
+            {/* Row 1: group headers */}
             <tr>
-              <th rowSpan={3} className="px-2 py-2 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 w-24 text-center">Month</th>
+              <th
+                rowSpan={3}
+                className="px-2 py-2 sticky left-0 z-30 bg-slate-200 text-slate-800 border-b border-r border-slate-300 w-28 min-w-[7rem] text-center text-xs font-bold"
+              >
+                Month
+              </th>
               
               {sections.generator && (
-                <th colSpan={generators.length * 3 + 4} className="px-2 py-2 bg-emerald-100 text-emerald-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Generator Data
+                <th colSpan={generators.length * 3 + 4} className={`${TH} font-bold text-sm tracking-wide ${G.groupHeader}`}>
+                  GENERATOR DATA
                 </th>
               )}
 
               {sections.boiler && (
-                <th colSpan={boilers.length * 6 + 3} className="px-2 py-2 bg-blue-100 text-blue-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Boiler Data
+                <th colSpan={boilers.length * 6 + 3} className={`${TH} font-bold text-sm tracking-wide ${B.groupHeader}`}>
+                  BOILER DATA
                 </th>
               )}
 
               {sections.compressor && (
-                <th colSpan={compressors.length + 3} className="px-2 py-2 bg-amber-100 text-amber-900 border-r border-slate-200 text-center font-bold uppercase tracking-wider">
-                  Compressor
+                <th colSpan={compressors.length + 3} className={`${TH} font-bold text-sm tracking-wide ${C.groupHeader}`}>
+                  <div className="flex items-center justify-center gap-3">
+                    <span>COMPRESSOR</span>
+                    {!isViewer && (
+                      <button
+                        onClick={addCompressor}
+                        className="no-print inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white hover:bg-amber-50 text-amber-800 border border-amber-400 text-xs font-semibold shadow-sm transition"
+                      >
+                        <Plus size={12} /> Add Compressor
+                      </button>
+                    )}
+                  </div>
                 </th>
               )}
 
               {sections.remarks && (
-                <th rowSpan={3} className="px-2 py-2 bg-gray-100 text-gray-900 text-center font-bold uppercase tracking-wider">
-                  Remarks
+                <th rowSpan={3} className={`${TH} font-bold text-sm tracking-wide min-w-[180px] ${R.groupHeader}`}>
+                  REMARKS
                 </th>
               )}
             </tr>
             
+            {/* Row 2: unit names + total columns */}
             <tr>
               {sections.generator && (
                 <>
                   {generators.map(g => (
-                    <th key={g.id} colSpan={3} className="px-2 py-1 text-center bg-emerald-50 min-w-[150px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <input
-                          type="text"
-                          value={g.name}
-                          onChange={(e) => setGenerators(prev => prev.map(x => x.id === g.id ? { ...x, name: e.target.value } : x))}
-                          disabled={isViewer}
-                          className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-emerald-500 disabled:bg-transparent disabled:border-transparent"
-                        />
-                      </div>
+                    <th key={g.id} colSpan={3} className={`${TH} min-w-[180px] ${G.subHeader}`}>
+                      <input
+                        type="text"
+                        value={g.name}
+                        onChange={(e) => setGenerators(prev => prev.map(x => x.id === g.id ? { ...x, name: e.target.value } : x))}
+                        disabled={isViewer}
+                        className={`${NAME_INPUT_BASE} ${G.nameInput}`}
+                      />
                     </th>
                   ))}
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50 border-l border-slate-200">Total Diesel</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total Run Hour</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Total Elec (kWh)</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-emerald-50/50">Intensity (kWh/L)</th>
+                  <th rowSpan={2} className={`${TH} min-w-[100px] ${G.subHeader}`}>Total Diesel</th>
+                  <th rowSpan={2} className={`${TH} min-w-[100px] ${G.subHeader}`}>Total Run Hour</th>
+                  <th rowSpan={2} className={`${TH} min-w-[110px] ${G.subHeader}`}>Total Elec (kWh)</th>
+                  <th rowSpan={2} className={`${TH} min-w-[110px] ${G.subHeader}`}>Intensity (kWh/L)</th>
                 </>
               )}
 
               {sections.boiler && (
                 <>
                   {boilers.map(b => (
-                    <th key={b.id} colSpan={6} className="px-2 py-1 text-center bg-blue-50 min-w-[250px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <input
-                          type="text"
-                          value={b.name}
-                          onChange={(e) => setBoilers(prev => prev.map(x => x.id === b.id ? { ...x, name: e.target.value } : x))}
-                          disabled={isViewer}
-                          className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-blue-500 disabled:bg-transparent disabled:border-transparent"
-                        />
-                      </div>
+                    <th key={b.id} colSpan={6} className={`${TH} min-w-[320px] ${B.subHeader}`}>
+                      <input
+                        type="text"
+                        value={b.name}
+                        onChange={(e) => setBoilers(prev => prev.map(x => x.id === b.id ? { ...x, name: e.target.value } : x))}
+                        disabled={isViewer}
+                        className={`${NAME_INPUT_BASE} ${B.nameInput}`}
+                      />
                     </th>
                   ))}
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50 border-l border-slate-200">Total Diesel (L)</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50">Total NG (m³)</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-blue-50/50">Total Steam</th>
+                  <th rowSpan={2} className={`${TH} min-w-[100px] ${B.subHeader}`}>Total Diesel (L)</th>
+                  <th rowSpan={2} className={`${TH} min-w-[100px] ${B.subHeader}`}>Total NG (m³)</th>
+                  <th rowSpan={2} className={`${TH} min-w-[100px] ${B.subHeader}`}>Total Steam</th>
                 </>
               )}
 
               {sections.compressor && (
                 <>
                   {compressors.map(c => (
-                    <th key={c.id} rowSpan={2} className="px-2 py-1 text-center bg-amber-50 min-w-[120px]">
-                      <div className="flex flex-col items-center gap-1">
+                    <th key={c.id} rowSpan={2} className={`${TH} min-w-[130px] ${C.subHeader}`}>
+                      <div className="flex items-center gap-1">
                         <input
                           type="text"
                           value={c.name}
                           onChange={(e) => updateCompressorName(c.id, e.target.value)}
                           disabled={isViewer}
-                          className="w-full text-xs px-1 py-0.5 border border-slate-300 rounded text-center focus:outline-none focus:border-amber-500 disabled:bg-transparent disabled:border-transparent"
+                          className={`${NAME_INPUT_BASE} ${C.nameInput}`}
                         />
                         {!isViewer && compressors.length > 1 && (
-                          <button onClick={() => removeCompressor(c.id)} className="text-red-500 hover:text-red-700 no-print">
+                          <button
+                            onClick={() => removeCompressor(c.id)}
+                            title="Remove compressor"
+                            className="no-print shrink-0 inline-flex items-center justify-center w-5 h-5 rounded bg-white border border-red-300 text-red-500 hover:bg-red-50 hover:text-red-700 transition"
+                          >
                             <X size={12} />
                           </button>
                         )}
                       </div>
                     </th>
                   ))}
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-amber-50/50 border-l border-slate-200">Total Elec (kWh)</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-amber-50/50">Run Hour</th>
-                  <th rowSpan={2} className="px-2 py-2 text-center whitespace-nowrap bg-amber-50/50">Total Air</th>
+                  <th rowSpan={2} className={`${TH} min-w-[110px] ${C.subHeader}`}>Total Elec (kWh)</th>
+                  <th rowSpan={2} className={`${TH} min-w-[100px] ${C.subHeader}`}>Run Hour</th>
+                  <th rowSpan={2} className={`${TH} min-w-[100px] ${C.subHeader}`}>Total Air</th>
                 </>
               )}
             </tr>
             
+            {/* Row 3: sub-column labels */}
             {(sections.generator || sections.boiler) && (
               <tr>
                 {sections.generator && (
                   <>
                     {generators.map(g => (
                       <React.Fragment key={`sub-${g.id}`}>
-                        <th className="px-1 py-1 text-center text-[10px] bg-emerald-50/30 border-l border-slate-200">Diesel (L) <Lock size={8} className="inline text-slate-400" /></th>
-                        <th className="px-1 py-1 text-center text-[10px] bg-emerald-50/30">Run Hour</th>
-                        <th className="px-1 py-1 text-center text-[10px] bg-emerald-50/30">Elec (kWh) <Lock size={8} className="inline text-slate-400" /></th>
+                        <th className={`${TH} text-[10px] ${G.subHeaderSoft}`}>
+                          Diesel (L) <Lock size={8} className="inline opacity-60" />
+                        </th>
+                        <th className={`${TH} text-[10px] ${G.subHeaderSoft}`}>Run Hour</th>
+                        <th className={`${TH} text-[10px] ${G.subHeaderSoft}`}>
+                          Elec (kWh) <Lock size={8} className="inline opacity-60" />
+                        </th>
                       </React.Fragment>
                     ))}
                   </>
@@ -851,12 +986,16 @@ export default function BoilerGeneratorCompressorForm({
                   <>
                     {boilers.map(b => (
                       <React.Fragment key={`sub-${b.id}`}>
-                        <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30 border-l border-slate-200">Diesel (L) <Lock size={8} className="inline text-slate-400" /></th>
-                        <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30">NG (m³)</th>
-                        <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30">Diesel Hour</th>
-                        <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30">NG Hour</th>
-                        <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30">Total Hour <Lock size={8} className="inline text-slate-400" /></th>
-                        <th className="px-1 py-1 text-center text-[10px] bg-blue-50/30">Steam</th>
+                        <th className={`${TH} text-[10px] ${B.subHeaderSoft}`}>
+                          Diesel (L) <Lock size={8} className="inline opacity-60" />
+                        </th>
+                        <th className={`${TH} text-[10px] ${B.subHeaderSoft}`}>NG (m³)</th>
+                        <th className={`${TH} text-[10px] ${B.subHeaderSoft}`}>Diesel Hour</th>
+                        <th className={`${TH} text-[10px] ${B.subHeaderSoft}`}>NG Hour</th>
+                        <th className={`${TH} text-[10px] ${B.subHeaderSoft}`}>
+                          Total Hour <Lock size={8} className="inline opacity-60" />
+                        </th>
+                        <th className={`${TH} text-[10px] ${B.subHeaderSoft}`}>Steam</th>
                       </React.Fragment>
                     ))}
                   </>
@@ -864,38 +1003,36 @@ export default function BoilerGeneratorCompressorForm({
               </tr>
             )}
           </thead>
-          <tbody className="divide-y divide-slate-100">
+
+          <tbody>
             {MONTHS.map((month, idx) => {
               const row = data[month] || getEmptyMonth();
+              const monthBg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50';
               return (
-                <tr key={month} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                  <td className="px-2 py-1 font-semibold text-slate-700 sticky left-0 bg-inherit z-10 border-r border-slate-200">{month}</td>
+                <tr key={month} className="group">
+                  <td className={`px-3 py-1.5 font-bold text-slate-800 text-xs sticky left-0 z-20 border-b border-r border-slate-300 ${monthBg}`}>
+                    {month}
+                  </td>
                   
                   {sections.generator && (
                     <>
                       {generators.map(g => (
                         <React.Fragment key={`row-${month}-${g.id}`}>
-                          <td className="px-1 py-1 border-l border-slate-200">
-                            <div className="w-16 px-1 py-1 text-right bg-slate-100/50 text-slate-600 text-xs rounded border border-transparent flex items-center justify-end gap-1">
-                              {fmt(n(row.genDieselValues?.[g.id]), 2)}
-                              <Lock size={10} className="text-slate-400 opacity-50" />
-                            </div>
+                          <td className={`${CELL} ${G.tint}`}>
+                            {lockedBox(G, fmt(n(row.genDieselValues?.[g.id]), 2), true)}
                           </td>
-                          <td className="px-1 py-1">
-                            <input type="text" inputMode="decimal" value={row.genRunningHourValues?.[g.id] || ''} onChange={(e) => updateNestedQty(month, 'genRunningHourValues', g.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                          <td className={`${CELL} ${G.tint}`}>
+                            {numInput(G, row.genRunningHourValues?.[g.id] || '', (v) => updateNestedQty(month, 'genRunningHourValues', g.id, v))}
                           </td>
-                          <td className="px-1 py-1">
-                            <div className="w-16 px-1 py-1 text-right bg-slate-100/50 text-slate-600 text-xs rounded border border-transparent flex items-center justify-end gap-1">
-                              {fmt(n(row.genElectricityValues?.[g.id]), 2)}
-                              <Lock size={10} className="text-slate-400 opacity-50" />
-                            </div>
+                          <td className={`${CELL} ${G.tint}`}>
+                            {lockedBox(G, fmt(n(row.genElectricityValues?.[g.id]), 2), true)}
                           </td>
                         </React.Fragment>
                       ))}
-                      <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30 border-l border-slate-200">{fmt(getGenDieselTotal(row), 2)}</td>
-                      <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{fmt(getGenRunHourTotal(row), 2)}</td>
-                      <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{fmt(getGenElecTotal(row), 2)}</td>
-                      <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{getGenIntensity(row)}</td>
+                      <td className={`${CELL} ${G.tintStrong}`}>{lockedBox(G, fmt(getGenDieselTotal(row), 2))}</td>
+                      <td className={`${CELL} ${G.tintStrong}`}>{lockedBox(G, fmt(getGenRunHourTotal(row), 2))}</td>
+                      <td className={`${CELL} ${G.tintStrong}`}>{lockedBox(G, fmt(getGenElecTotal(row), 2))}</td>
+                      <td className={`${CELL} ${G.tintStrong}`}>{lockedBox(G, getGenIntensity(row))}</td>
                     </>
                   )}
 
@@ -903,58 +1040,73 @@ export default function BoilerGeneratorCompressorForm({
                     <>
                       {boilers.map(b => (
                         <React.Fragment key={`row-${month}-${b.id}`}>
-                          <td className="px-1 py-1 border-l border-slate-200">
-                            <div className="w-16 px-1 py-1 text-right bg-slate-100/50 text-slate-600 text-xs rounded border border-transparent flex items-center justify-end gap-1">
-                              {fmt(n(row.boilerDieselValues?.[b.id]), 2)}
-                              <Lock size={10} className="text-slate-400 opacity-50" />
-                            </div>
+                          <td className={`${CELL} ${B.tint}`}>
+                            {lockedBox(B, fmt(n(row.boilerDieselValues?.[b.id]), 2), true)}
                           </td>
-                          <td className="px-1 py-1">
-                            <input type="text" inputMode="decimal" value={row.boilerNgValues?.[b.id] || ''} onChange={(e) => updateNestedQty(month, 'boilerNgValues', b.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                          <td className={`${CELL} ${B.tint}`}>
+                            {numInput(B, row.boilerNgValues?.[b.id] || '', (v) => updateNestedQty(month, 'boilerNgValues', b.id, v))}
                           </td>
-                          <td className="px-1 py-1">
-                            <input type="text" inputMode="decimal" value={row.boilerDieselHourValues?.[b.id] || ''} onChange={(e) => updateNestedQty(month, 'boilerDieselHourValues', b.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                          <td className={`${CELL} ${B.tint}`}>
+                            {numInput(B, row.boilerDieselHourValues?.[b.id] || '', (v) => updateNestedQty(month, 'boilerDieselHourValues', b.id, v))}
                           </td>
-                          <td className="px-1 py-1">
-                            <input type="text" inputMode="decimal" value={row.boilerNgHourValues?.[b.id] || ''} onChange={(e) => updateNestedQty(month, 'boilerNgHourValues', b.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                          <td className={`${CELL} ${B.tint}`}>
+                            {numInput(B, row.boilerNgHourValues?.[b.id] || '', (v) => updateNestedQty(month, 'boilerNgHourValues', b.id, v))}
                           </td>
-                          <td className="px-1 py-1 text-right font-bold text-blue-700 bg-blue-50/30">{fmt(getBoilerTotalRunHour(row, b.id), 2)}</td>
-                          <td className="px-1 py-1">
-                            <input type="text" inputMode="decimal" value={row.boilerSteamValues?.[b.id] || ''} onChange={(e) => updateNestedQty(month, 'boilerSteamValues', b.id, e.target.value)} disabled={isViewer} className="w-16 px-1 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                          <td className={`${CELL} ${B.tint}`}>
+                            {lockedBox(B, fmt(getBoilerTotalRunHour(row, b.id), 2))}
+                          </td>
+                          <td className={`${CELL} ${B.tint}`}>
+                            {numInput(B, row.boilerSteamValues?.[b.id] || '', (v) => updateNestedQty(month, 'boilerSteamValues', b.id, v))}
                           </td>
                         </React.Fragment>
                       ))}
-                      <td className="px-2 py-1 text-right font-bold text-blue-700 bg-blue-50/30 border-l border-slate-200">{fmt(getBoilerDieselTotal(row), 2)}</td>
-                      <td className="px-2 py-1 text-right font-bold text-blue-700 bg-blue-50/30">{fmt(getBoilerNgTotal(row), 2)}</td>
-                      <td className="px-2 py-1 text-right font-bold text-blue-700 bg-blue-50/30">{fmt(boilers.reduce((s, b) => s + n(row.boilerSteamValues?.[b.id]), 0), 2)}</td>
+                      <td className={`${CELL} ${B.tintStrong}`}>{lockedBox(B, fmt(getBoilerDieselTotal(row), 2))}</td>
+                      <td className={`${CELL} ${B.tintStrong}`}>{lockedBox(B, fmt(getBoilerNgTotal(row), 2))}</td>
+                      <td className={`${CELL} ${B.tintStrong}`}>
+                        {lockedBox(B, fmt(boilers.reduce((s, b) => s + n(row.boilerSteamValues?.[b.id]), 0), 2))}
+                      </td>
                     </>
                   )}
 
                   {sections.compressor && (
                     <>
                       {compressors.map(c => (
-                        <td key={`row-${month}-${c.id}`} className="px-1 py-1">
-                          <input type="text" inputMode="decimal" value={row.compElecValues?.[c.id] || ''} onChange={(e) => updateNestedQty(month, 'compElecValues', c.id, e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" />
+                        <td key={`row-${month}-${c.id}`} className={`${CELL} ${C.tint}`}>
+                          {numInput(C, row.compElecValues?.[c.id] || '', (v) => updateNestedQty(month, 'compElecValues', c.id, v))}
                         </td>
                       ))}
-                      <td className="px-2 py-1 text-right font-bold text-amber-700 bg-amber-50/30 border-l border-slate-200">{fmt(getCompElecTotal(row), 2)}</td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.compRunningHour} onChange={(e) => updateMonthField(month, 'compRunningHour', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
-                      <td className="px-1 py-1"><input type="text" inputMode="decimal" value={row.compAir} onChange={(e) => updateMonthField(month, 'compAir', e.target.value)} disabled={isViewer} className="w-20 px-2 py-1 text-right border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" /></td>
+                      <td className={`${CELL} ${C.tintStrong}`}>{lockedBox(C, fmt(getCompElecTotal(row), 2))}</td>
+                      <td className={`${CELL} ${C.tint}`}>
+                        {numInput(C, row.compRunningHour, (v) => updateMonthField(month, 'compRunningHour', v))}
+                      </td>
+                      <td className={`${CELL} ${C.tint}`}>
+                        {numInput(C, row.compAir, (v) => updateMonthField(month, 'compAir', v))}
+                      </td>
                     </>
                   )}
 
                   {sections.remarks && (
-                    <td className="px-1 py-1">
-                      <input type="text" value={row.remarks} onChange={(e) => updateMonthField(month, 'remarks', e.target.value)} disabled={isViewer} className="w-full min-w-[120px] px-2 py-1 border border-transparent hover:border-slate-300 focus:border-emerald-500 rounded bg-transparent outline-none text-xs" placeholder="Notes..." />
+                    <td className={`${CELL} ${R.tint}`}>
+                      <input
+                        type="text"
+                        value={row.remarks}
+                        onChange={(e) => updateMonthField(month, 'remarks', e.target.value)}
+                        disabled={isViewer}
+                        className={`w-full min-w-[160px] border border-slate-300 bg-white rounded px-2 py-1 text-left text-xs text-slate-800 outline-none transition disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed ${R.input}`}
+                        placeholder="Notes..."
+                      />
                     </td>
                   )}
                 </tr>
               );
             })}
           </tbody>
-          <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-bold text-xs">
+
+          <tfoot>
             <tr>
-              <td className="px-2 py-2 sticky left-0 bg-slate-100 z-10 border-r border-slate-300">Total</td>
+              <td className="px-3 py-2 sticky left-0 z-20 bg-slate-300 text-slate-900 text-xs font-bold border-t-2 border-r border-slate-400">
+                Total
+              </td>
               
               {sections.generator && (
                 <>
@@ -967,16 +1119,16 @@ export default function BoilerGeneratorCompressorForm({
                     });
                     return (
                       <React.Fragment key={`tot-${g.id}`}>
-                        <td className="px-1 py-2 text-right border-l border-slate-200 text-emerald-800">{fmt(sumDiesel, 2)}</td>
-                        <td className="px-1 py-2 text-right text-emerald-800">{fmt(sumHour, 2)}</td>
-                        <td className="px-1 py-2 text-right text-emerald-800">{fmt(sumElec, 2)}</td>
+                        <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${G.footer}`}>{fmt(sumDiesel, 2)}</td>
+                        <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${G.footer}`}>{fmt(sumHour, 2)}</td>
+                        <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${G.footer}`}>{fmt(sumElec, 2)}</td>
                       </React.Fragment>
                     );
                   })}
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50 border-l border-slate-200">{fmt(getYearlySum((m, r) => getGenDieselTotal(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getGenRunHourTotal(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{fmt(getYearlySum((m, r) => getGenElecTotal(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-emerald-800 bg-emerald-100/50">{getYearlyGenIntensity()}</td>
+                  <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${G.footerStrong}`}>{fmt(getYearlySum((m, r) => getGenDieselTotal(r)), 2)}</td>
+                  <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${G.footerStrong}`}>{fmt(getYearlySum((m, r) => getGenRunHourTotal(r)), 2)}</td>
+                  <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${G.footerStrong}`}>{fmt(getYearlySum((m, r) => getGenElecTotal(r)), 2)}</td>
+                  <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${G.footerStrong}`}>{getYearlyGenIntensity()}</td>
                 </>
               )}
 
@@ -995,18 +1147,18 @@ export default function BoilerGeneratorCompressorForm({
                     });
                     return (
                       <React.Fragment key={`tot-${b.id}`}>
-                        <td className="px-1 py-2 text-right border-l border-slate-200 text-blue-800">{fmt(sumDiesel, 2)}</td>
-                        <td className="px-1 py-2 text-right text-blue-800">{fmt(sumNg, 2)}</td>
-                        <td className="px-1 py-2 text-right text-blue-800">{fmt(sumDieselHour, 2)}</td>
-                        <td className="px-1 py-2 text-right text-blue-800">{fmt(sumNgHour, 2)}</td>
-                        <td className="px-1 py-2 text-right text-blue-800">{fmt(sumTotalHour, 2)}</td>
-                        <td className="px-1 py-2 text-right text-blue-800">{fmt(sumSteam, 2)}</td>
+                        <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${B.footer}`}>{fmt(sumDiesel, 2)}</td>
+                        <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${B.footer}`}>{fmt(sumNg, 2)}</td>
+                        <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${B.footer}`}>{fmt(sumDieselHour, 2)}</td>
+                        <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${B.footer}`}>{fmt(sumNgHour, 2)}</td>
+                        <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${B.footer}`}>{fmt(sumTotalHour, 2)}</td>
+                        <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${B.footer}`}>{fmt(sumSteam, 2)}</td>
                       </React.Fragment>
                     );
                   })}
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50 border-l border-slate-200">{fmt(getYearlySum((m, r) => getBoilerDieselTotal(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50">{fmt(getYearlySum((m, r) => getBoilerNgTotal(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-blue-800 bg-blue-100/50">{fmt(getYearlySum((m, r) => boilers.reduce((s, b) => s + n(r.boilerSteamValues?.[b.id]), 0)), 2)}</td>
+                  <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${B.footerStrong}`}>{fmt(getYearlySum((m, r) => getBoilerDieselTotal(r)), 2)}</td>
+                  <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${B.footerStrong}`}>{fmt(getYearlySum((m, r) => getBoilerNgTotal(r)), 2)}</td>
+                  <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${B.footerStrong}`}>{fmt(getYearlySum((m, r) => boilers.reduce((s, b) => s + n(r.boilerSteamValues?.[b.id]), 0)), 2)}</td>
                 </>
               )}
 
@@ -1015,29 +1167,25 @@ export default function BoilerGeneratorCompressorForm({
                   {compressors.map(c => {
                     let sum = 0;
                     MONTHS.forEach(m => { sum += n(data[m]?.compElecValues?.[c.id]); });
-                    return <td key={`tot-${c.id}`} className="px-2 py-2 text-right text-amber-800">{fmt(sum, 2)}</td>;
+                    return (
+                      <td key={`tot-${c.id}`} className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${C.footer}`}>
+                        {fmt(sum, 2)}
+                      </td>
+                    );
                   })}
-                  <td className="px-2 py-2 text-right text-amber-800 bg-amber-100/50 border-l border-slate-200">{fmt(getYearlySum((m, r) => getCompElecTotal(r)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-amber-800 bg-amber-100/50">{fmt(getYearlySum((m, r) => n(r.compRunningHour)), 2)}</td>
-                  <td className="px-2 py-2 text-right text-amber-800 bg-amber-100/50">{fmt(getYearlySum((m, r) => n(r.compAir)), 2)}</td>
+                  <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${C.footerStrong}`}>{fmt(getYearlySum((m, r) => getCompElecTotal(r)), 2)}</td>
+                  <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${C.footerStrong}`}>{fmt(getYearlySum((m, r) => n(r.compRunningHour)), 2)}</td>
+                  <td className={`px-2 py-2 text-right text-xs font-bold border-t-2 border-r ${C.footerStrong}`}>{fmt(getYearlySum((m, r) => n(r.compAir)), 2)}</td>
                 </>
               )}
 
               {sections.remarks && (
-                <td className="px-2 py-2 text-right text-slate-400">-</td>
+                <td className={`px-2 py-2 text-center text-xs font-bold border-t-2 ${R.footerStrong}`}>-</td>
               )}
             </tr>
           </tfoot>
         </table>
       </div>
-
-      {!isViewer && sections.compressor && (
-        <div className="mt-4 flex flex-wrap gap-3 no-print">
-          <button onClick={addCompressor} className="flex items-center gap-2 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-sm font-semibold transition-colors">
-            <Plus size={16} /> Add Compressor
-          </button>
-        </div>
-      )}
     </div>
   );
 }
