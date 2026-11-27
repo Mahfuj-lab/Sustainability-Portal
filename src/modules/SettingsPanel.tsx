@@ -1,4 +1,5 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { UNIT_DIRECTORY } from '../utils/unitDirectory';
 
 export type ThemeKey = 'emerald' | 'navy' | 'midnight' | 'teal' | 'slate';
 
@@ -184,6 +185,326 @@ const DEFAULT_FACTORS: FactorSet = {
   r32Gwp: 675,
 };
 
+/* ------------------------------------------------------------------ */
+/* Group Logo, Unit Stamp Seal & Digital Signature Manager (types)     */
+/* ------------------------------------------------------------------ */
+
+export interface SignatoryInfo {
+  name: string;
+  designation: string;
+  signatureUrl: string;
+}
+
+export interface UnitSignatoryRecord {
+  stampUrl: string;
+  preparedBy: SignatoryInfo;
+  checkedBy: SignatoryInfo;
+  approvedBy: SignatoryInfo;
+}
+
+export type UnitSignatoriesConfig = Record<string, UnitSignatoryRecord>;
+
+const LOGO_STORAGE_KEY = 'corporate_brand_logo';
+const DEFAULT_LOGO_URL = '/epyllion-logo.png';
+const SIGNATORIES_STORAGE_KEY = 'unit_signatories_config';
+const CUSTOM_UNIT_OPTION = '__custom_unit__';
+const MAX_IMAGE_UPLOAD_BYTES = 8 * 1024 * 1024;
+
+const emptySignatory = (): SignatoryInfo => ({ name: '', designation: '', signatureUrl: '' });
+
+const emptyUnitRecord = (): UnitSignatoryRecord => ({
+  stampUrl: '',
+  preparedBy: emptySignatory(),
+  checkedBy: emptySignatory(),
+  approvedBy: emptySignatory(),
+});
+
+function normalizeSignatory(value: unknown): SignatoryInfo {
+  const obj = (value && typeof value === 'object' ? value : {}) as Partial<SignatoryInfo>;
+  return {
+    name: typeof obj.name === 'string' ? obj.name : '',
+    designation: typeof obj.designation === 'string' ? obj.designation : '',
+    signatureUrl: typeof obj.signatureUrl === 'string' ? obj.signatureUrl : '',
+  };
+}
+
+function normalizeUnitRecord(value: unknown): UnitSignatoryRecord {
+  const obj = (value && typeof value === 'object' ? value : {}) as Partial<UnitSignatoryRecord>;
+  return {
+    stampUrl: typeof obj.stampUrl === 'string' ? obj.stampUrl : '',
+    preparedBy: normalizeSignatory(obj.preparedBy),
+    checkedBy: normalizeSignatory(obj.checkedBy),
+    approvedBy: normalizeSignatory(obj.approvedBy),
+  };
+}
+
+function loadUnitSignatories(): UnitSignatoriesConfig {
+  try {
+    const raw = localStorage.getItem(SIGNATORIES_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    const result: UnitSignatoriesConfig = {};
+    Object.keys(parsed).forEach((code) => {
+      result[code] = normalizeUnitRecord((parsed as Record<string, unknown>)[code]);
+    });
+    return result;
+  } catch (e) {
+    console.error('Failed to load unit signatories', e);
+    return {};
+  }
+}
+
+function loadBrandLogo(): string {
+  try {
+    const stored = localStorage.getItem(LOGO_STORAGE_KEY);
+    if (stored && stored.length > 0) return stored;
+  } catch (e) {
+    console.error('Failed to load brand logo', e);
+  }
+  return DEFAULT_LOGO_URL;
+}
+
+function isUnitConfigured(rec: UnitSignatoryRecord | undefined): boolean {
+  if (!rec) return false;
+  const hasSignatory = (s: SignatoryInfo) => Boolean(s.name.trim() || s.designation.trim() || s.signatureUrl);
+  return Boolean(rec.stampUrl) || hasSignatory(rec.preparedBy) || hasSignatory(rec.checkedBy) || hasSignatory(rec.approvedBy);
+}
+
+/**
+ * UNIT_DIRECTORY may be an array of strings, an array of objects
+ * ({ code, name }), or an object keyed by unit code. Normalise all shapes.
+ */
+function extractUnitEntries(dir: unknown): Array<{ code: string; name: string }> {
+  const out: Array<{ code: string; name: string }> = [];
+  const pushEntry = (code: unknown, name: unknown) => {
+    if (typeof code === 'string' && code.trim()) {
+      out.push({ code: code.trim(), name: typeof name === 'string' ? name : '' });
+    }
+  };
+  if (Array.isArray(dir)) {
+    dir.forEach((item) => {
+      if (typeof item === 'string') {
+        pushEntry(item, '');
+      } else if (item && typeof item === 'object') {
+        const o = item as Record<string, unknown>;
+        pushEntry(o.code ?? o.unitCode ?? o.id ?? o.key, o.name ?? o.unitName ?? o.fullName ?? o.label);
+      }
+    });
+  } else if (dir && typeof dir === 'object') {
+    Object.entries(dir as Record<string, unknown>).forEach(([key, val]) => {
+      if (typeof val === 'string') {
+        pushEntry(key, val);
+      } else if (val && typeof val === 'object') {
+        const o = val as Record<string, unknown>;
+        pushEntry(o.code ?? o.unitCode ?? key, o.name ?? o.unitName ?? o.fullName ?? o.label);
+      } else {
+        pushEntry(key, '');
+      }
+    });
+  }
+  const seen = new Set<string>();
+  return out.filter((e) => {
+    if (seen.has(e.code)) return false;
+    seen.add(e.code);
+    return true;
+  });
+}
+
+/**
+ * Reads an image file, scales it down (keeping aspect ratio) to maxWidth
+ * using an HTML5 Canvas, and returns a Base64 Data URL.
+ * PNG inputs stay PNG so transparency (stamps, signatures) is preserved.
+ */
+function compressImageToDataUrl(file: File, maxWidth: number, forcePng = false): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!/^image\/(png|jpe?g)$/i.test(file.type)) {
+      reject(new Error('Only PNG or JPG images are supported.'));
+      return;
+    }
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      reject(new Error('Image is too large. Choose a file under 8 MB.'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read the selected file.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('The selected file is not a valid image.'));
+      img.onload = () => {
+        const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Image processing is not supported in this browser.'));
+          return;
+        }
+        const keepPng = forcePng || /png/i.test(file.type);
+        if (!keepPng) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(keepPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+interface ImageUploadFieldProps {
+  label: string;
+  value: string;
+  onChange: (dataUrl: string) => void;
+  disabled?: boolean;
+  hint?: string;
+  maxWidth?: number;
+  forcePng?: boolean;
+  accept?: string;
+  previewHeightClass?: string;
+}
+
+function ImageUploadField({
+  label,
+  value,
+  onChange,
+  disabled = false,
+  hint,
+  maxWidth = 300,
+  forcePng = false,
+  accept = 'image/png,image/jpeg',
+  previewHeightClass = 'h-24',
+}: ImageUploadFieldProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [error, setError] = useState<string>('');
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const dataUrl = await compressImageToDataUrl(file, maxWidth, forcePng);
+      setError('');
+      onChange(dataUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.');
+    }
+  };
+
+  return (
+    <div>
+      <span className="text-xs font-medium text-slate-600">{label}</span>
+      <div
+        className={
+          'mt-1 flex items-center justify-center rounded-md border border-dashed border-slate-300 overflow-hidden ' +
+          previewHeightClass
+        }
+        style={{
+          backgroundColor: '#ffffff',
+          backgroundImage:
+            'linear-gradient(45deg, #f1f5f9 25%, transparent 25%), linear-gradient(-45deg, #f1f5f9 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f1f5f9 75%), linear-gradient(-45deg, transparent 75%, #f1f5f9 75%)',
+          backgroundSize: '12px 12px',
+          backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0',
+        }}
+      >
+        {value ? (
+          <img src={value} alt={label} className="max-h-full max-w-full object-contain" />
+        ) : (
+          <span className="text-xs text-slate-400">No image uploaded</span>
+        )}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input
+          ref={inputRef}
+          type="file"
+          accept={accept}
+          onChange={handleFile}
+          disabled={disabled}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={disabled}
+          className="px-3 py-1.5 text-xs font-semibold rounded-md border border-emerald-500 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {value ? 'Replace image' : 'Upload image'}
+        </button>
+        {value && (
+          <button
+            type="button"
+            onClick={() => {
+              setError('');
+              onChange('');
+            }}
+            disabled={disabled}
+            className="px-3 py-1.5 text-xs font-semibold rounded-md border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      {hint && !error && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+interface SignatoryEditorProps {
+  title: string;
+  value: SignatoryInfo;
+  onChange: (next: SignatoryInfo) => void;
+  disabled?: boolean;
+}
+
+function SignatoryEditor({ title, value, onChange, disabled = false }: SignatoryEditorProps) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <h4 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">{title}</h4>
+      <div className="space-y-3">
+        <label className="block">
+          <span className="text-xs font-medium text-slate-600">Full Name</span>
+          <input
+            type="text"
+            value={value.name}
+            onChange={(e) => onChange({ ...value, name: e.target.value })}
+            disabled={disabled}
+            placeholder="e.g. Md. Rahim Uddin"
+            className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:border-emerald-500 disabled:bg-slate-50"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs font-medium text-slate-600">Designation</span>
+          <input
+            type="text"
+            value={value.designation}
+            onChange={(e) => onChange({ ...value, designation: e.target.value })}
+            disabled={disabled}
+            placeholder="e.g. Sustainability Officer"
+            className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:border-emerald-500 disabled:bg-slate-50"
+          />
+        </label>
+        <ImageUploadField
+          label="Signature Image (PNG)"
+          value={value.signatureUrl}
+          onChange={(url) => onChange({ ...value, signatureUrl: url })}
+          disabled={disabled}
+          maxWidth={300}
+          forcePng
+          accept="image/png"
+          previewHeightClass="h-20"
+          hint="Transparent PNG works best. Auto-compressed to 300px wide."
+        />
+      </div>
+    </div>
+  );
+}
+
 export interface SettingsPanelProps {
   currentThemeId: string;
   onThemeChange: (newTheme: any) => void;
@@ -267,6 +588,28 @@ export default function SettingsPanel({
   const [factorYears, setFactorYears] = useState<number[]>([2023, 2024, 2025, 2026, 2027]);
   const [yearFactorsSaved, setYearFactorsSaved] = useState<boolean>(false);
 
+  // Group Logo, Unit Stamp Seal & Digital Signature Manager state
+  const directoryEntries = useMemo(() => extractUnitEntries(UNIT_DIRECTORY as unknown), []);
+  const [brandLogo, setBrandLogo] = useState<string>(() => loadBrandLogo());
+  const [logoNotice, setLogoNotice] = useState<string>('');
+  const [unitConfig, setUnitConfig] = useState<UnitSignatoriesConfig>(() => loadUnitSignatories());
+  const [customUnits, setCustomUnits] = useState<string[]>([]);
+  const [selectedUnit, setSelectedUnit] = useState<string>(() => {
+    const entries = extractUnitEntries(UNIT_DIRECTORY as unknown);
+    return entries.length > 0 ? entries[0].code : UNITS[0];
+  });
+  const [unitDraft, setUnitDraft] = useState<UnitSignatoryRecord>(() => {
+    const entries = extractUnitEntries(UNIT_DIRECTORY as unknown);
+    const first = entries.length > 0 ? entries[0].code : UNITS[0];
+    const cfg = loadUnitSignatories();
+    return cfg[first] ? normalizeUnitRecord(cfg[first]) : emptyUnitRecord();
+  });
+  const [addingCustomUnit, setAddingCustomUnit] = useState<boolean>(false);
+  const [customUnitInput, setCustomUnitInput] = useState<string>('');
+  const [customUnitError, setCustomUnitError] = useState<string>('');
+  const [unitSaved, setUnitSaved] = useState<string>('');
+  const [unitSaveError, setUnitSaveError] = useState<string>('');
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem('sustainability_factors_by_year');
@@ -282,6 +625,18 @@ export default function SettingsPanel({
       console.error('Failed to load factor years', e);
     }
   }, []);
+
+  useEffect(() => {
+    if (!logoNotice) return;
+    const t = setTimeout(() => setLogoNotice(''), 3000);
+    return () => clearTimeout(t);
+  }, [logoNotice]);
+
+  useEffect(() => {
+    if (!unitSaved) return;
+    const t = setTimeout(() => setUnitSaved(''), 3500);
+    return () => clearTimeout(t);
+  }, [unitSaved]);
 
   const currentYearFactors = factorsByYear[String(selectedFactorYear)] || DEFAULT_FACTORS;
 
@@ -392,6 +747,137 @@ export default function SettingsPanel({
   const handleSaveAlerts = (): void => {
     if (restSet) restSet('alertRules', alerts);
     setAlertsSaved(true);
+  };
+
+  // ---- Group Logo handlers ----
+  const handleLogoChange = (dataUrl: string): void => {
+    if (!dataUrl) {
+      handleResetLogo();
+      return;
+    }
+    try {
+      localStorage.setItem(LOGO_STORAGE_KEY, dataUrl);
+      setBrandLogo(dataUrl);
+      setLogoNotice('✓ Group logo saved');
+    } catch (e) {
+      setLogoNotice('Could not save the logo. Browser storage may be full.');
+    }
+  };
+
+  const handleResetLogo = (): void => {
+    try {
+      localStorage.removeItem(LOGO_STORAGE_KEY);
+    } catch (e) {
+      console.error('Failed to reset logo', e);
+    }
+    setBrandLogo(DEFAULT_LOGO_URL);
+    setLogoNotice('✓ Logo reset to default');
+  };
+
+  // ---- Unit stamp & signatory handlers ----
+  const unitOptions = useMemo<Array<{ code: string; name: string }>>(() => {
+    const list = [...directoryEntries];
+    const known = new Set(list.map((e) => e.code));
+    [...customUnits, ...Object.keys(unitConfig)].forEach((code) => {
+      if (!known.has(code)) {
+        known.add(code);
+        list.push({ code, name: 'Custom unit' });
+      }
+    });
+    return list;
+  }, [directoryEntries, customUnits, unitConfig]);
+
+  const configuredUnits = useMemo<Array<{ code: string; name: string; record: UnitSignatoryRecord }>>(() => {
+    return Object.keys(unitConfig)
+      .filter((code) => isUnitConfigured(unitConfig[code]))
+      .map((code) => {
+        const match = unitOptions.find((o) => o.code === code);
+        return { code, name: match ? match.name : '', record: unitConfig[code] };
+      })
+      .sort((a, b) => a.code.localeCompare(b.code));
+  }, [unitConfig, unitOptions]);
+
+  const selectUnit = (code: string): void => {
+    setSelectedUnit(code);
+    setUnitDraft(unitConfig[code] ? normalizeUnitRecord(unitConfig[code]) : emptyUnitRecord());
+    setUnitSaved('');
+    setUnitSaveError('');
+  };
+
+  const handleUnitSelectChange = (value: string): void => {
+    if (value === CUSTOM_UNIT_OPTION) {
+      setAddingCustomUnit(true);
+      setCustomUnitInput('');
+      setCustomUnitError('');
+      return;
+    }
+    setAddingCustomUnit(false);
+    setCustomUnitError('');
+    selectUnit(value);
+  };
+
+  const handleConfirmCustomUnit = (): void => {
+    const code = customUnitInput.trim().toUpperCase();
+    if (!code) {
+      setCustomUnitError('Enter a unit code.');
+      return;
+    }
+    if (!/^[A-Z0-9][A-Z0-9 _-]{0,29}$/.test(code)) {
+      setCustomUnitError('Use letters, numbers, spaces, hyphens or underscores (max 30 characters).');
+      return;
+    }
+    const exists = unitOptions.some((o) => o.code.toUpperCase() === code);
+    if (!exists) {
+      setCustomUnits((prev) => [...prev, code]);
+    }
+    const resolved = unitOptions.find((o) => o.code.toUpperCase() === code)?.code ?? code;
+    setAddingCustomUnit(false);
+    setCustomUnitError('');
+    setCustomUnitInput('');
+    selectUnit(resolved);
+  };
+
+  const updateSignatory = (
+    field: 'preparedBy' | 'checkedBy' | 'approvedBy',
+    next: SignatoryInfo
+  ): void => {
+    setUnitDraft((prev) => ({ ...prev, [field]: next }));
+    setUnitSaved('');
+  };
+
+  const handleSaveUnitConfig = (): void => {
+    if (!selectedUnit) return;
+    const nextConfig: UnitSignatoriesConfig = {
+      ...unitConfig,
+      [selectedUnit]: {
+        stampUrl: unitDraft.stampUrl,
+        preparedBy: { ...unitDraft.preparedBy, name: unitDraft.preparedBy.name.trim(), designation: unitDraft.preparedBy.designation.trim() },
+        checkedBy: { ...unitDraft.checkedBy, name: unitDraft.checkedBy.name.trim(), designation: unitDraft.checkedBy.designation.trim() },
+        approvedBy: { ...unitDraft.approvedBy, name: unitDraft.approvedBy.name.trim(), designation: unitDraft.approvedBy.designation.trim() },
+      },
+    };
+    try {
+      localStorage.setItem(SIGNATORIES_STORAGE_KEY, JSON.stringify(nextConfig));
+      setUnitConfig(nextConfig);
+      setUnitSaveError('');
+      setUnitSaved(`✓ Stamp & signatures saved for ${selectedUnit}`);
+    } catch (e) {
+      setUnitSaveError('Could not save. Browser storage may be full — try smaller images.');
+    }
+  };
+
+  const handleRemoveUnitConfig = (code: string): void => {
+    const nextConfig: UnitSignatoriesConfig = { ...unitConfig };
+    delete nextConfig[code];
+    try {
+      localStorage.setItem(SIGNATORIES_STORAGE_KEY, JSON.stringify(nextConfig));
+      setUnitConfig(nextConfig);
+      if (code === selectedUnit) setUnitDraft(emptyUnitRecord());
+      setUnitSaveError('');
+      setUnitSaved(`✓ Configuration removed for ${code}`);
+    } catch (e) {
+      setUnitSaveError('Could not update browser storage.');
+    }
   };
 
   const tabs: Array<{ id: SettingsTab; label: string; icon: string }> = [
@@ -733,6 +1219,314 @@ export default function SettingsPanel({
               >
                 Save Factors for {selectedFactorYear}
               </button>
+            </div>
+          </div>
+
+          {/* Group Logo, Unit Stamp Seal & Digital Signature Manager */}
+          <div className="mt-10 border-t border-slate-200 pt-8">
+            <div className="mb-5">
+              <h2 className="text-lg font-semibold text-slate-800">
+                Group Logo, Unit Stamp Seal &amp; Digital Signature Manager
+              </h2>
+              <p className="text-sm text-slate-500">
+                Set one logo for the whole group, then add a stamp and signatories for each unit. Everything here is applied to Excel and PDF reports automatically.
+              </p>
+            </div>
+
+            {/* Part 1: Common Group Logo */}
+            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm mb-6">
+              <h3 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">
+                Epyllion Group Logo (all units &amp; reports)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <ImageUploadField
+                    label="Group Logo (PNG or JPG)"
+                    value={brandLogo === DEFAULT_LOGO_URL ? '' : brandLogo}
+                    onChange={handleLogoChange}
+                    disabled={!canEdit}
+                    maxWidth={300}
+                    previewHeightClass="h-28"
+                    hint="Auto-compressed to a maximum width of 300px."
+                  />
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={handleResetLogo}
+                      disabled={!canEdit || brandLogo === DEFAULT_LOGO_URL}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Reset to Default Logo
+                    </button>
+                    {logoNotice && (
+                      <span
+                        role="status"
+                        className={
+                          'ml-3 text-xs font-medium ' +
+                          (logoNotice.startsWith('✓') ? 'text-emerald-700' : 'text-red-600')
+                        }
+                      >
+                        {logoNotice}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-xs font-medium text-slate-600">Live preview</span>
+                  <div className="mt-1 rounded-md border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-16 w-32 items-center justify-center rounded border border-slate-200 bg-white p-1">
+                        <img
+                          src={brandLogo}
+                          alt="Epyllion Group Logo preview"
+                          className="max-h-full max-w-full object-contain"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.visibility = 'hidden';
+                          }}
+                          onLoad={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.visibility = 'visible';
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs font-semibold text-emerald-800">
+                        {brandLogo === DEFAULT_LOGO_URL ? 'Default logo in use' : 'Custom logo in use'}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-xs text-emerald-800">
+                      This common Group Logo will automatically appear on the TOP-LEFT of all Excel &amp; PDF reports across all units.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Part 2: Unit-wise Stamp Seal & Signatory Manager */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Unit-wise Stamp Seal &amp; Signatories</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Choose a unit, upload its stamp, and add the people who prepare, check and approve its reports.
+                  </p>
+                </div>
+                <label className="block md:w-72">
+                  <span className="text-xs font-medium text-slate-600">Unit</span>
+                  <select
+                    value={addingCustomUnit ? CUSTOM_UNIT_OPTION : selectedUnit}
+                    onChange={(e) => handleUnitSelectChange(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {unitOptions.map((u) => (
+                      <option key={u.code} value={u.code}>
+                        {u.name ? `${u.code} — ${u.name}` : u.code}
+                        {isUnitConfigured(unitConfig[u.code]) ? '  ✓' : ''}
+                      </option>
+                    ))}
+                    <option value={CUSTOM_UNIT_OPTION}>+ Add Custom Unit Code</option>
+                  </select>
+                </label>
+              </div>
+
+              {addingCustomUnit && (
+                <div className="mb-4 rounded-md border border-dashed border-emerald-400 bg-white p-3">
+                  <label className="block">
+                    <span className="text-xs font-medium text-slate-600">New unit code</span>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        value={customUnitInput}
+                        onChange={(e) => {
+                          setCustomUnitInput(e.target.value);
+                          setCustomUnitError('');
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleConfirmCustomUnit();
+                          }
+                        }}
+                        disabled={!canEdit}
+                        placeholder="e.g. EXWL"
+                        className="w-48 rounded border border-slate-300 px-2 py-1.5 text-sm uppercase focus:outline-none focus:border-emerald-500 disabled:bg-slate-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleConfirmCustomUnit}
+                        disabled={!canEdit}
+                        className="px-3 py-1.5 text-xs font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Add unit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddingCustomUnit(false);
+                          setCustomUnitError('');
+                        }}
+                        className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </label>
+                  {customUnitError && <p className="mt-1 text-xs text-red-600">{customUnitError}</p>}
+                </div>
+              )}
+
+              {!addingCustomUnit && selectedUnit && (
+                <>
+                  <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                    <h4 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">
+                      Company Stamp / Seal — {selectedUnit}
+                    </h4>
+                    <div className="max-w-xs">
+                      <ImageUploadField
+                        label="Stamp image (transparent PNG or JPG)"
+                        value={unitDraft.stampUrl}
+                        onChange={(url) => {
+                          setUnitDraft((prev) => ({ ...prev, stampUrl: url }));
+                          setUnitSaved('');
+                        }}
+                        disabled={!canEdit}
+                        maxWidth={300}
+                        previewHeightClass="h-32"
+                        hint="Auto-compressed to a maximum width of 300px. PNG keeps transparency."
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+                    <SignatoryEditor
+                      title="Prepared By"
+                      value={unitDraft.preparedBy}
+                      onChange={(next) => updateSignatory('preparedBy', next)}
+                      disabled={!canEdit}
+                    />
+                    <SignatoryEditor
+                      title="Checked By"
+                      value={unitDraft.checkedBy}
+                      onChange={(next) => updateSignatory('checkedBy', next)}
+                      disabled={!canEdit}
+                    />
+                    <SignatoryEditor
+                      title="Approved By"
+                      value={unitDraft.approvedBy}
+                      onChange={(next) => updateSignatory('approvedBy', next)}
+                      disabled={!canEdit}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    {unitSaved && (
+                      <span
+                        role="status"
+                        className="text-sm text-emerald-800 font-medium bg-emerald-100 border border-emerald-200 px-3 py-1 rounded-full"
+                      >
+                        {unitSaved}
+                      </span>
+                    )}
+                    {unitSaveError && <span className="text-sm text-red-600">{unitSaveError}</span>}
+                    <button
+                      type="button"
+                      onClick={handleSaveUnitConfig}
+                      disabled={!canEdit}
+                      className="px-5 py-2 text-sm font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    >
+                      Save Unit Stamp &amp; Signatures
+                    </button>
+                  </div>
+                  {!canEdit && (
+                    <p className="mt-2 text-xs text-amber-600 text-right">
+                      Your role ({userRole}) can view but not edit stamps and signatures.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Summary of configured units */}
+            <div className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+                <h3 className="text-sm font-bold text-slate-800">Configured units</h3>
+                <span className="text-xs text-slate-500">
+                  {configuredUnits.length} of {unitOptions.length} units set up
+                </span>
+              </div>
+              {configuredUnits.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No unit has a stamp or signatory yet. Pick a unit above and save its details to see it here.
+                </p>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {configuredUnits.map(({ code, name, record }) => {
+                    const people: Array<{ label: string; info: SignatoryInfo }> = [
+                      { label: 'Prepared', info: record.preparedBy },
+                      { label: 'Checked', info: record.checkedBy },
+                      { label: 'Approved', info: record.approvedBy },
+                    ];
+                    return (
+                      <li key={code} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-slate-200 bg-white">
+                            {record.stampUrl ? (
+                              <img src={record.stampUrl} alt={`${code} stamp`} className="max-h-full max-w-full object-contain" />
+                            ) : (
+                              <span className="text-[10px] text-slate-400">No stamp</span>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-slate-800">
+                              {code}
+                              {name && <span className="ml-2 text-xs font-normal text-slate-500">{name}</span>}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              {people.map((p) => {
+                                const done = Boolean(p.info.name.trim() || p.info.signatureUrl);
+                                return (
+                                  <span
+                                    key={p.label}
+                                    className={
+                                      'text-xs px-2 py-0.5 rounded-full border ' +
+                                      (done
+                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                        : 'bg-slate-50 border-slate-200 text-slate-400')
+                                    }
+                                  >
+                                    {p.label}
+                                    {p.info.name.trim() ? `: ${p.info.name.trim()}` : done ? '' : ': not set'}
+                                    {p.info.signatureUrl ? ' ✍' : ''}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAddingCustomUnit(false);
+                              selectUnit(code);
+                            }}
+                            className="px-3 py-1.5 text-xs font-semibold rounded-md border border-emerald-500 text-emerald-700 hover:bg-emerald-50"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveUnitConfig(code)}
+                            disabled={!canEdit}
+                            className="px-3 py-1.5 text-xs font-semibold rounded-md border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           </div>
         </section>
