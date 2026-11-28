@@ -30,3 +30,7 @@ If you are developing a production application, we recommend enabling type-aware
 ```
 
 See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+
+## Environment configuration
+
+Create a `.env` file in the project root and set `VITE_FIREBASE_API_KEY` to the Firebase API key for your project. Vite exposes `VITE_` variables in the client bundle, so this key is not a secret; restrict it with Firebase/Google Cloud API settings and rely on Firestore security rules for data access.

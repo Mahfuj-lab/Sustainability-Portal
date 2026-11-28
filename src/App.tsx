@@ -26,7 +26,7 @@ type ThemeKey = string;
 // FIRESTORE REST API (no SDK, native fetch)
 // ============================================================
 const PROJECT_ID = "sustainability-portal-886cf";
-const API_KEY = "AIzaSyB6JNUFMjSOjD4Xr3-hMQ90MNurDN8URu0";
+const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY;
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
 const toFSValue = (v: any): any => {
