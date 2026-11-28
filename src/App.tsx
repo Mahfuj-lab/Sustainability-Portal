@@ -19,7 +19,6 @@ import McdDataManagement from './modules/McdDataManagement';
 import HumanResource from './modules/HumanResource';
 import DocumentsModule from './modules/DocumentsModule';
 import CustomExcelExport from './modules/CustomExcelExport';
-import UserManagement from './modules/UserManagement';
 type ThemeKey = string;
 
 // ============================================================
@@ -76,14 +75,56 @@ const restGet = async (path: string) => {
 };
 
 const restList = async (collectionId: string) => {
-  const r = await fetch(`${BASE}/${collectionId}?key=${API_KEY}`);
-  if (!r.ok) {
-    if (r.status === 404) return [];
-    throw new Error(`LIST ${collectionId} failed: ${r.status}`);
+  const docs: any[] = [];
+  let pageToken = '';
+  do {
+    const params = new URLSearchParams({ key: API_KEY || '', pageSize: '1000' });
+    if (pageToken) params.set('pageToken', pageToken);
+    const r = await fetch(`${BASE}/${collectionId}?${params}`);
+    if (!r.ok) {
+      if (r.status === 404) return [];
+      throw new Error(`LIST ${collectionId} failed: ${r.status}`);
+    }
+    const json = await r.json();
+    docs.push(...(json.documents || []).map((d: any) => ({ id: d.name?.split('/').pop(), ...fromFSFields(d.fields || {}) })));
+    pageToken = json.nextPageToken || '';
+  } while (pageToken);
+  return docs;
+};
+
+const restListCollectionIds = async (parentPath = ''): Promise<string[]> => {
+  const collectionIds: string[] = [];
+  let pageToken = '';
+  do {
+    const params = new URLSearchParams({ key: API_KEY || '' });
+    if (pageToken) params.set('pageToken', pageToken);
+    const url = `${BASE}${parentPath ? `/${parentPath}` : ''}:listCollectionIds?${params}`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageSize: 1000, pageToken: pageToken || undefined }),
+    });
+    if (!r.ok) throw new Error(`LIST COLLECTIONS failed: ${r.status} ${await r.text()}`);
+    const json = await r.json();
+    collectionIds.push(...(json.collectionIds || []));
+    pageToken = json.nextPageToken || '';
+  } while (pageToken);
+  return collectionIds;
+};
+
+const restExportAllDocuments = async (): Promise<{ collection: string; id: string; data: any }[]> => {
+  const exported: { collection: string; id: string; data: any }[] = [];
+  const pendingCollections = await restListCollectionIds();
+  while (pendingCollections.length) {
+    const collection = pendingCollections.shift()!;
+    const documents = await restList(collection);
+    for (const document of documents) {
+      const { id, ...data } = document;
+      exported.push({ collection, id: String(id || ''), data });
+      pendingCollections.push(...(await restListCollectionIds(`${collection}/${id}`)));
+    }
   }
-  const json = await r.json();
-  const docs = json.documents || [];
-  return docs.map((d: any) => ({ id: d.name?.split('/').pop(), ...fromFSFields(d.fields || {}) }));
+  return exported;
 };
 
 const restSet = async (collectionId: string, docId: string, data: any) => {
@@ -154,8 +195,35 @@ const restQuery = async (collectionId: string, filters: { field: string; value: 
 // ============================================================
 // TYPES & CONSTANTS
 // ============================================================
-type Role = 'super_admin' | 'entry_user' | 'viewer';
-interface UserRecord { id?: string; email: string; password: string; full_name: string; role: Role; allowed_modules: string[]; allowed_factories: string[]; }
+type Role = 'super_admin' | 'editor' | 'viewer';
+type UserStatus = 'pending' | 'approved' | 'rejected';
+interface UserRecord {
+  id?: string;
+  email: string;
+  password: string;
+  full_name: string;
+  role: Role;
+  status: UserStatus;
+  allowedModules: string[];
+  allowedUnits: string[];
+}
+
+const normalizeUser = (raw: any): UserRecord => {
+  const allowedModules = Array.isArray(raw?.allowedModules) ? raw.allowedModules
+    : Array.isArray(raw?.allowed_modules) ? raw.allowed_modules : [];
+  const allowedUnits = Array.isArray(raw?.allowedUnits) ? raw.allowedUnits
+    : Array.isArray(raw?.allowed_factories) ? raw.allowed_factories : [];
+  return {
+    ...raw,
+    role: raw?.role === 'super_admin' ? 'super_admin' : raw?.role === 'editor' || raw?.role === 'entry_user' ? 'editor' : 'viewer',
+    status: raw?.role === 'super_admin' || raw?.status === 'active' || raw?.status === 'approved'
+      ? 'approved'
+      : raw?.status === 'pending' ? 'pending' : raw?.status === 'rejected' ? 'rejected' : 'approved',
+    allowedModules: allowedModules.filter((id: unknown) =>
+      id === 'dashboard' || MODULE_PERMISSION_OPTIONS.some(option => option.id === id)),
+    allowedUnits: allowedUnits.filter((unit: unknown) => typeof unit === 'string' && FACTORIES.includes(unit)),
+  };
+};
 
 interface EmissionFactors { grid_electricity: number; natural_gas: number; diesel: number; petrol_octane: number; cng: number; }
 interface EnergyRow {
@@ -339,6 +407,15 @@ const MODULES = [
   },
      
 
+];
+
+const MODULE_PERMISSION_OPTIONS = [
+  ...MODULES.flatMap(module => [
+    { id: module.id, label: module.label },
+    ...module.subModules.map(subModule => ({ id: subModule.id, label: `${module.label} / ${subModule.label}` })),
+  ]),
+  { id: 'excel_export', label: 'Custom Excel Export' },
+  { id: 'settings', label: 'Settings' },
 ];
 
 // Icons for the Quick-Launch Inventory cards
@@ -538,13 +615,14 @@ interface DashboardHomeProps {
   kpiSelection: string[];
   onKpiSlotChange: (slot: number, id: string) => void;
   onLaunch: (subModuleId: string) => void;
+  canLaunch: (moduleId: string) => boolean;
   status: UnitStatus;
   onStatusChange: (key: keyof UnitStatus, value: string) => void;
   canEdit: boolean;
 }
 
 const DashboardHome: React.FC<DashboardHomeProps> = ({
-  unit, year, kpiValues, kpiSelection, onKpiSlotChange, onLaunch, status, onStatusChange, canEdit
+  unit, year, kpiValues, kpiSelection, onKpiSlotChange, onLaunch, canLaunch, status, onStatusChange, canEdit
 }) => {
   const [customOpen, setCustomOpen] = useState(false);
   const [logoOk, setLogoOk] = useState(true);
@@ -648,7 +726,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
           <h3 className="text-sm font-bold text-gray-800">Quick-Launch Inventory Modules</h3>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-          {(inventory?.subModules || []).map(sub => {
+          {(inventory?.subModules || []).filter(sub => canLaunch(sub.id)).map(sub => {
             const Icon = INVENTORY_ICONS[sub.id] || ClipboardList;
             return (
               <button key={sub.id} onClick={() => onLaunch(sub.id)}
@@ -699,6 +777,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({
 const App: React.FC = () => {
   const [user, setUser] = useState<UserRecord | null>(null);
   const [bootLoading, setBootLoading] = useState(true);
+  const [bootError, setBootError] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [factors, setFactors] = useState<EmissionFactors>(DEFAULT_FACTORS);
 
@@ -731,9 +810,26 @@ const App: React.FC = () => {
   const [dataLoading, setDataLoading] = useState(false);
 
   useEffect(() => {
-    const sess = localStorage.getItem('sp_session');
-    if (sess) { try { setUser(JSON.parse(sess)); } catch {} }
-    setBootLoading(false);
+    const restoreSession = async () => {
+      const sess = localStorage.getItem('sp_session');
+      if (sess) {
+        try {
+          const savedUser = normalizeUser(JSON.parse(sess));
+          if (!savedUser.id) throw new Error('Stored session is missing its user ID.');
+          const latestUser = await restGet(`users/${savedUser.id}`);
+          if (!latestUser) throw new Error('Account no longer exists.');
+          const currentUser = normalizeUser(latestUser);
+          setUser(currentUser);
+          if (currentUser.status === 'approved') localStorage.setItem('sp_session', JSON.stringify(currentUser));
+          else localStorage.removeItem('sp_session');
+        } catch {
+          localStorage.removeItem('sp_session');
+          setBootError('Unable to verify your saved session. Please sign in again.');
+        }
+      }
+      setBootLoading(false);
+    };
+    restoreSession();
   }, []);
 
   useEffect(() => {
@@ -761,29 +857,48 @@ const App: React.FC = () => {
 
   const userAllowedModules = useMemo(() => {
     if (!user) return [];
-       return ['dashboard', ...MODULES.flatMap(m => [m.id, ...m.subModules.map(s => s.id)])];
-
+    return isSuper ? [
+      ...MODULES.flatMap(m => [m.id, ...m.subModules.map(s => s.id)]),
+      'settings', 'excel_export',
+    ] : user.allowedModules;
   }, [user, isSuper]);
 
   const userAllowedFactories = useMemo(() => {
     if (!user) return [];
     if (isSuper) return [...FACTORIES];
-    return user.allowed_factories || [];
+    return user.allowedUnits || [];
   }, [user, isSuper]);
 
   useEffect(() => {
-    if (userAllowedFactories.length && !userAllowedFactories.includes(factory)) setFactory(userAllowedFactories[0]);
-  }, [userAllowedFactories, factory]);
+    if (isSuper && !factory) setFactory(FACTORIES[0]);
+    else if (!isSuper && !userAllowedFactories.includes(factory)) setFactory(userAllowedFactories[0] || '');
+  }, [userAllowedFactories, factory, isSuper]);
+
+  const canAccessModule = useCallback((moduleId: string) => {
+    if (isSuper) return true;
+    if (userAllowedModules.includes(moduleId)) return true;
+    const parent = MODULES.find(m => m.subModules.some(s => s.id === moduleId));
+    return Boolean(parent && userAllowedModules.includes(parent.id));
+  }, [isSuper, userAllowedModules]);
+
+  const hasUnitAccess = isSuper || userAllowedFactories.includes(factory);
 
   useEffect(() => {
     if (!user) return;
-    if (!userAllowedModules.includes(activeModule) && activeModule !== 'settings' && activeModule !== 'user_management' && activeModule !== 'excel_export') {
+    if (activeModule === 'dashboard' || activeModule === 'user_management' && isSuper) return;
+    if (!canAccessModule(activeModule)) {
       setActiveModule('dashboard');
     }
-  }, [user, userAllowedModules, activeModule]);
+  }, [user, canAccessModule, activeModule, isSuper]);
 
   const loadData = useCallback(async () => {
     if (!user) return;
+    if (!isSuper && !user.allowedUnits.includes(factory)) {
+      setEnergyRows([]);
+      setProdRows([]);
+      setDataLoading(false);
+      return;
+    }
     setDataLoading(true);
     try {
       const [eSnap, pSnap] = await Promise.all([
@@ -798,13 +913,17 @@ const App: React.FC = () => {
       } else setProdRows(MONTHS.map(emptyProdRow));
     } catch { setEnergyRows(MONTHS.map(emptyEnergyRow)); setProdRows(MONTHS.map(emptyProdRow)); }
     finally { setDataLoading(false); }
-  }, [user, factory, year]);
+  }, [user, factory, year, isSuper]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   const saveEnergy = async () => {
-    if (!canEdit) return;
+    if (!canEdit || !hasUnitAccess) return;
     try {
+      const existing = await restGet(`energy_data/${factory}_${year}`);
+      const months = existing ? Object.keys(existing.rows || {}).filter(month => MONTHS.includes(month)) : [];
+      if (existing && months.length === 0) months.push('the existing monthly records');
+      if (months.length && !window.confirm(`An existing record for ${factory} • ${months.join(', ')} • ${year} will be overwritten. Continue?`)) return;
       const rowsObj: any = {};
       energyRows.forEach(r => { rowsObj[r.month] = r; });
       await restSet('energy_data', `${factory}_${year}`, { factory, year, rows: rowsObj });
@@ -812,8 +931,12 @@ const App: React.FC = () => {
     } catch (e: any) { alert('Save failed: ' + e.message); }
   };
   const saveProd = async () => {
-    if (!canEdit) return;
+    if (!canEdit || !hasUnitAccess) return;
     try {
+      const existing = await restGet(`production_data/${factory}_${year}`);
+      const months = existing ? Object.keys(existing.rows || {}).filter(month => MONTHS.includes(month)) : [];
+      if (existing && months.length === 0) months.push('the existing monthly records');
+      if (months.length && !window.confirm(`An existing record for ${factory} • ${months.join(', ')} • ${year} will be overwritten. Continue?`)) return;
       const rowsObj: any = {};
       prodRows.forEach(r => { rowsObj[r.month] = r; });
       await restSet('production_data', `${factory}_${year}`, { factory, year, rows: rowsObj });
@@ -830,7 +953,7 @@ const App: React.FC = () => {
     setProdRows(prev => { const c = [...prev]; (c[mi] as any)[key] = val === '' ? 0 : n(val); return c; });
   };
 
-  const logout = () => { localStorage.removeItem('sp_session'); setUser(null); setActiveModule('dashboard'); setExpandedModules([]); };
+  const logout = () => { localStorage.removeItem('sp_session'); setUser(null); setBootError(''); setActiveModule('dashboard'); setExpandedModules([]); };
 
   const toggleExpand = (id: string) => {
     setExpandedModules(prev => 
@@ -988,6 +1111,7 @@ const App: React.FC = () => {
   }, [activeModule, factory, year, energyRows, prodRows, factors, ncv]);
 
   const launchInventory = (subId: string) => {
+    if (!canAccessModule(subId)) return;
     setExpandedModules(prev => prev.includes('inventory_mgmt') ? prev : [...prev, 'inventory_mgmt']);
     setActiveModule(subId);
   };
@@ -1021,21 +1145,25 @@ const App: React.FC = () => {
   const [userLoading, setUserLoading] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [newUserOpen, setNewUserOpen] = useState(false);
-  const [newUser, setNewUser] = useState<Omit<UserRecord,'id'>>({ email:'', password:'', full_name:'', role:'viewer', allowed_modules:['kpi_mgmt'], allowed_factories:[...FACTORIES] });
+  const [newUser, setNewUser] = useState<Omit<UserRecord,'id'>>({
+    email: '', password: '', full_name: '', role: 'viewer', status: 'approved', allowedModules: [], allowedUnits: [],
+  });
+  const [backupLoading, setBackupLoading] = useState(false);
 
   const loadUsers = async () => {
     setUserLoading(true);
-    try { const list = await restList('users'); setAllUsers(list as UserRecord[]); }
-    catch {} finally { setUserLoading(false); }
+    try { const list = await restList('users'); setAllUsers(list.map(normalizeUser)); }
+    catch (e: any) { alert('Failed to load users: ' + e.message); }
+    finally { setUserLoading(false); }
   };
   useEffect(() => { if (activeModule === 'user_management' && isSuper) loadUsers(); }, [activeModule, isSuper]);
 
   const addNewUser = async () => {
     if (!newUser.email || !newUser.password || !newUser.full_name) { alert('Fill all fields'); return; }
     try {
-      await restCreate('users', newUser);
+      await restCreate('users', { ...newUser, email: newUser.email.trim().toLowerCase() });
       setNewUserOpen(false);
-      setNewUser({ email:'', password:'', full_name:'', role:'viewer', allowed_modules:['kpi_mgmt'], allowed_factories:[...FACTORIES] });
+      setNewUser({ email: '', password: '', full_name: '', role: 'viewer', status: 'approved', allowedModules: [], allowedUnits: [] });
       loadUsers();
     } catch (e: any) { alert('Failed: ' + e.message); }
   };
@@ -1047,6 +1175,34 @@ const App: React.FC = () => {
       setEditingUser(null);
       loadUsers();
     } catch (e: any) { alert('Failed: ' + e.message); }
+  };
+  const setUserApproval = async (target: UserRecord, status: UserStatus) => {
+    if (!target.id || target.role === 'super_admin' && status !== 'approved') return;
+    try {
+      await restPatch('users', target.id, { status });
+      await loadUsers();
+    } catch (e: any) { alert(`Failed to ${status === 'approved' ? 'approve' : 'reject'} user: ` + e.message); }
+  };
+  const downloadDatabaseBackup = async () => {
+    setBackupLoading(true);
+    try {
+      const documents = await restExportAllDocuments();
+      const csv = buildCSV(
+        ['Collection', 'Document ID', 'Data (JSON)'],
+        documents.map(document => [
+          document.collection,
+          document.id,
+          JSON.stringify(document.data, (key, value) => key.toLowerCase() === 'password' ? '[REDACTED]' : value),
+        ]),
+      );
+      const today = new Date();
+      const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      downloadCSV(`firestore-full-backup-${date}.csv`, csv);
+    } catch (e: any) {
+      alert('Database backup failed: ' + e.message);
+    } finally {
+      setBackupLoading(false);
+    }
   };
 
   const [settingsLogo, setSettingsLogo] = useState(logoUrl);
@@ -1084,7 +1240,8 @@ const App: React.FC = () => {
   const activeRoute = findActiveModuleAndSub();
 
   if (bootLoading) return <div className="min-h-screen flex items-center justify-center bg-white"><div className="animate-pulse text-emerald-600 text-sm">Loading...</div></div>;
-  if (!user) return <LoginScreen onLogin={setUser} />;
+  if (!user) return <LoginScreen onLogin={setUser} initialError={bootError} />;
+  if (user.status !== 'approved') return <ApprovalStatusScreen status={user.status} onLogout={logout} />;
 
   return (
     <div className={`h-screen flex flex-col transition-colors duration-300 ${themeConfig.pageBg}`}>
@@ -1147,9 +1304,10 @@ const App: React.FC = () => {
                 <Home size={16} className={activeModule === 'dashboard' ? 'text-emerald-600' : 'text-gray-400'} />
                 <span className="flex-1">Dashboard</span>
               </button>
-              {MODULES.map(m => {
+              {MODULES.filter(m => isSuper || userAllowedModules.includes(m.id) || m.subModules.some(s => canAccessModule(s.id))).map(m => {
                 const Icon = m.icon;
                 const isExpanded = expandedModules.includes(m.id);
+                const visibleSubModules = m.subModules.filter(sub => canAccessModule(sub.id));
                 return (
                   <div key={m.id} className="flex flex-col">
                     <button 
@@ -1167,7 +1325,7 @@ const App: React.FC = () => {
                     
                     {isExpanded && (
                       <div className="ml-9 mt-1 space-y-1 border-l border-gray-100 pl-2">
-                        {m.subModules.map(sub => {
+                        {visibleSubModules.map(sub => {
                           const isActive = activeModule === sub.id;
                           return (
                             <button
@@ -1190,20 +1348,20 @@ const App: React.FC = () => {
 
             {/* SYSTEM MENUS */}
             <div className="p-3 border-t border-gray-100 space-y-1 mt-auto">
-              <button onClick={() => setActiveModule('excel_export')}
+              {canAccessModule('excel_export') && <button onClick={() => setActiveModule('excel_export')}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm ${activeModule === 'excel_export' ? 'bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200' : 'text-gray-600 hover:bg-gray-50'}`}>
                 <FileSpreadsheet size={16} /><span className="flex-1">Custom Excel Export</span>
-              </button>
+              </button>}
               {isSuper && (
                 <button onClick={() => setActiveModule('user_management')}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm ${activeModule === 'user_management' ? 'bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200' : 'text-gray-600 hover:bg-gray-50'}`}>
                   <Users size={16} /><span className="flex-1">User Management</span>
                 </button>
               )}
-              <button onClick={() => setActiveModule('settings')}
+              {canAccessModule('settings') && <button onClick={() => setActiveModule('settings')}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm ${activeModule === 'settings' ? 'bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200' : 'text-gray-600 hover:bg-gray-50'}`}>
                 <Settings size={16} /><span className="flex-1">Settings</span>
-              </button>
+              </button>}
             </div>
           </aside>
         )}
@@ -1224,9 +1382,10 @@ const App: React.FC = () => {
                   }`}>
                   <Home size={16} className={activeModule === 'dashboard' ? 'text-emerald-600' : 'text-gray-400'} /><span>Dashboard</span>
                 </button>
-                {MODULES.map(m => {
+                {MODULES.filter(m => isSuper || userAllowedModules.includes(m.id) || m.subModules.some(s => canAccessModule(s.id))).map(m => {
                   const Icon = m.icon;
                   const isExpanded = expandedModules.includes(m.id);
+                  const visibleSubModules = m.subModules.filter(sub => canAccessModule(sub.id));
                   return (
                     <div key={m.id} className="flex flex-col">
                       <button 
@@ -1243,7 +1402,7 @@ const App: React.FC = () => {
                       </button>
                       {isExpanded && (
                         <div className="ml-9 mt-1 space-y-1 border-l border-gray-100 pl-2">
-                          {m.subModules.map(sub => {
+                          {visibleSubModules.map(sub => {
                             const isActive = activeModule === sub.id;
                             return (
                               <button
@@ -1265,20 +1424,20 @@ const App: React.FC = () => {
               </nav>
 
               <div className="p-3 border-t border-gray-100 space-y-1 mt-auto">
-                <button onClick={() => { setActiveModule('excel_export'); setSidebarOpen(false); }}
+                {canAccessModule('excel_export') && <button onClick={() => { setActiveModule('excel_export'); setSidebarOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm ${activeModule === 'excel_export' ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'}`}>
                   <FileSpreadsheet size={16} /><span>Custom Excel Export</span>
-                </button>
+                </button>}
                 {isSuper && (
                   <button onClick={() => { setActiveModule('user_management'); setSidebarOpen(false); }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm ${activeModule === 'user_management' ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <Users size={16} /><span>User Management</span>
                   </button>
                 )}
-                <button onClick={() => { setActiveModule('settings'); setSidebarOpen(false); }}
+                {canAccessModule('settings') && <button onClick={() => { setActiveModule('settings'); setSidebarOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm ${activeModule === 'settings' ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'}`}>
                   <Settings size={16} /><span>Settings</span>
-                </button>
+                </button>}
               </div>
             </div>
           </div>
@@ -1286,6 +1445,17 @@ const App: React.FC = () => {
 
         {/* MAIN CONTENT AREA */}
         <main className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto">
+          {!hasUnitAccess ? (
+            <div className="max-w-xl mx-auto mt-12 rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+              <h2 className="text-lg font-bold text-amber-900">No Units Assigned</h2>
+              <p className="mt-2 text-sm text-amber-800">An administrator must assign one or more units to your account before you can view portal data.</p>
+            </div>
+          ) : !canAccessModule(activeModule) && activeModule !== 'dashboard' ? (
+            <div className="max-w-xl mx-auto mt-12 rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+              <h2 className="text-lg font-bold text-amber-900">Module Not Assigned</h2>
+              <p className="mt-2 text-sm text-amber-800">An administrator must grant access to this module.</p>
+            </div>
+          ) : <>
           {activeModule === 'dashboard' ? (
             <DashboardHome
               unit={factory}
@@ -1294,6 +1464,7 @@ const App: React.FC = () => {
               kpiSelection={kpiSelection}
               onKpiSlotChange={changeKpiSlot}
               onLaunch={launchInventory}
+              canLaunch={canAccessModule}
               status={unitStatus}
               onStatusChange={changeUnitStatus}
               canEdit={canEdit}
@@ -1367,9 +1538,14 @@ const App: React.FC = () => {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <h2 className="text-sm font-bold text-gray-800">User Management</h2>
-                <button onClick={() => setNewUserOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold">
-                  <Plus size={14} /> Add User
-                </button>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button onClick={downloadDatabaseBackup} disabled={backupLoading} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-xs font-semibold">
+                    <FileSpreadsheet size={14} /> {backupLoading ? 'Preparing Backup...' : 'Download Full Database Backup (CSV/Excel)'}
+                  </button>
+                  <button onClick={() => setNewUserOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold">
+                    <Plus size={14} /> Add User
+                  </button>
+                </div>
               </div>
               {userLoading ? (
                 <div className="p-4 text-xs text-emerald-600">Loading users...</div>
@@ -1381,6 +1557,7 @@ const App: React.FC = () => {
                         <th className="px-3 py-2 text-left font-semibold">Name</th>
                         <th className="px-3 py-2 text-left font-semibold">Email</th>
                         <th className="px-3 py-2 text-left font-semibold">Role</th>
+                        <th className="px-3 py-2 text-left font-semibold">Status</th>
                         <th className="px-3 py-2 text-left font-semibold">Modules</th>
                         <th className="px-3 py-2 text-left font-semibold">Units</th>
                         <th className="px-3 py-2 text-right font-semibold">Actions</th>
@@ -1392,13 +1569,20 @@ const App: React.FC = () => {
                           <td className="px-3 py-2">{u.full_name}</td>
                           <td className="px-3 py-2">{u.email}</td>
                           <td className="px-3 py-2">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${u.role === 'super_admin' ? 'bg-emerald-100 text-emerald-700' : u.role === 'entry_user' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${u.role === 'super_admin' ? 'bg-emerald-100 text-emerald-700' : u.role === 'editor' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
                               {u.role}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-[10px] text-gray-500">{(u.allowed_modules || []).length} modules</td>
-                          <td className="px-3 py-2 text-[10px] text-gray-500">{(u.allowed_factories || []).length} units</td>
-                          <td className="px-3 py-2 text-right">
+                          <td className="px-3 py-2">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${u.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : u.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                              {u.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-[10px] text-gray-500">{u.allowedModules.length} modules</td>
+                          <td className="px-3 py-2 text-[10px] text-gray-500">{u.allowedUnits.length} units</td>
+                          <td className="px-3 py-2 text-right whitespace-nowrap">
+                            {u.status !== 'approved' && <button onClick={() => setUserApproval(u, 'approved')} className="text-emerald-600 hover:underline text-[11px] mr-2">Approve</button>}
+                            {u.status !== 'rejected' && u.role !== 'super_admin' && <button onClick={() => setUserApproval(u, 'rejected')} className="text-red-600 hover:underline text-[11px] mr-2">Reject</button>}
                             <button onClick={() => setEditingUser(u)} className="text-emerald-600 hover:underline text-[11px]">Edit</button>
                           </td>
                         </tr>
@@ -1502,18 +1686,11 @@ const App: React.FC = () => {
               selectedUnit={factory}
               selectedYear={year.toString()}
               userRole={user?.role || 'viewer'}
+              allowedUnits={userAllowedFactories}
               restGet={restGet}
             />
           )}
 
-          {activeModule === 'user_management' && (
-            <UserManagement
-              currentUser={user}
-              userRole={user?.role || 'viewer'}
-              restGet={restGet}
-              restSet={restSet}
-            />
-    )}
                   {activeModule.startsWith('fp_') && (
             <FactoryProfile
               activeSubModule={activeModule}
@@ -1533,6 +1710,8 @@ const App: React.FC = () => {
               selectedUnit={factory}
               selectedYear={year.toString()}
               userRole={user?.role || 'viewer'}
+              restGet={restGet}
+              restSet={restSet}
             />
           )}
 
@@ -1548,8 +1727,7 @@ const App: React.FC = () => {
               restGet={restGet}
             />
           )}
-
-             
+          </>}
         </main>
       </div>
 
@@ -1570,18 +1748,18 @@ const App: React.FC = () => {
                 <label className="block font-semibold text-gray-600 mb-1">Role</label>
                 <select value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value as Role })} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg">
                   <option value="super_admin">super_admin</option>
-                  <option value="entry_user">entry_user</option>
+                  <option value="editor">editor</option>
                   <option value="viewer">viewer</option>
                 </select>
               </div>
               <div>
                 <label className="block font-semibold text-gray-600 mb-1">Modules</label>
-                <div className="grid grid-cols-2 gap-1">
-                  {MODULES.map(m => (
-                    <label key={m.id} className="flex items-center gap-2 text-[11px]">
-                      <input type="checkbox" checked={editingUser.allowed_modules.includes(m.id)}
-                        onChange={e => setEditingUser({ ...editingUser, allowed_modules: e.target.checked ? [...editingUser.allowed_modules, m.id] : editingUser.allowed_modules.filter(x => x !== m.id) })} />
-                      {m.label}
+                <div className="grid grid-cols-2 gap-1 max-h-40 overflow-y-auto">
+                  {MODULE_PERMISSION_OPTIONS.map(option => (
+                    <label key={option.id} className="flex items-center gap-2 text-[11px]">
+                      <input type="checkbox" checked={editingUser.allowedModules.includes(option.id)}
+                        onChange={e => setEditingUser({ ...editingUser, allowedModules: e.target.checked ? [...editingUser.allowedModules, option.id] : editingUser.allowedModules.filter(x => x !== option.id) })} />
+                      {option.label}
                     </label>
                   ))}
                 </div>
@@ -1591,8 +1769,8 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-3 gap-1">
                   {FACTORIES.map(f => (
                     <label key={f} className="flex items-center gap-2 text-[11px]">
-                      <input type="checkbox" checked={editingUser.allowed_factories.includes(f)}
-                        onChange={e => setEditingUser({ ...editingUser, allowed_factories: e.target.checked ? [...editingUser.allowed_factories, f] : editingUser.allowed_factories.filter(x => x !== f) })} />
+                      <input type="checkbox" checked={editingUser.allowedUnits.includes(f)}
+                        onChange={e => setEditingUser({ ...editingUser, allowedUnits: e.target.checked ? [...editingUser.allowedUnits, f] : editingUser.allowedUnits.filter(x => x !== f) })} />
                       {f}
                     </label>
                   ))}
@@ -1632,18 +1810,18 @@ const App: React.FC = () => {
                 <label className="block font-semibold text-gray-600 mb-1">Role</label>
                 <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value as Role })} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg">
                   <option value="super_admin">super_admin</option>
-                  <option value="entry_user">entry_user</option>
+                  <option value="editor">editor</option>
                   <option value="viewer">viewer</option>
                 </select>
               </div>
               <div>
                 <label className="block font-semibold text-gray-600 mb-1">Modules</label>
-                <div className="grid grid-cols-2 gap-1">
-                  {MODULES.map(m => (
-                    <label key={m.id} className="flex items-center gap-2 text-[11px]">
-                      <input type="checkbox" checked={newUser.allowed_modules.includes(m.id)}
-                        onChange={e => setNewUser({ ...newUser, allowed_modules: e.target.checked ? [...newUser.allowed_modules, m.id] : newUser.allowed_modules.filter(x => x !== m.id) })} />
-                      {m.label}
+                <div className="grid grid-cols-2 gap-1 max-h-40 overflow-y-auto">
+                  {MODULE_PERMISSION_OPTIONS.map(option => (
+                    <label key={option.id} className="flex items-center gap-2 text-[11px]">
+                      <input type="checkbox" checked={newUser.allowedModules.includes(option.id)}
+                        onChange={e => setNewUser({ ...newUser, allowedModules: e.target.checked ? [...newUser.allowedModules, option.id] : newUser.allowedModules.filter(x => x !== option.id) })} />
+                      {option.label}
                     </label>
                   ))}
                 </div>
@@ -1653,8 +1831,8 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-3 gap-1">
                   {FACTORIES.map(f => (
                     <label key={f} className="flex items-center gap-2 text-[11px]">
-                      <input type="checkbox" checked={newUser.allowed_factories.includes(f)}
-                        onChange={e => setNewUser({ ...newUser, allowed_factories: e.target.checked ? [...newUser.allowed_factories, f] : newUser.allowed_factories.filter(x => x !== f) })} />
+                      <input type="checkbox" checked={newUser.allowedUnits.includes(f)}
+                        onChange={e => setNewUser({ ...newUser, allowedUnits: e.target.checked ? [...newUser.allowedUnits, f] : newUser.allowedUnits.filter(x => x !== f) })} />
                       {f}
                     </label>
                   ))}
@@ -1680,14 +1858,35 @@ const App: React.FC = () => {
 // ============================================================
 // LOGIN SCREEN
 // ============================================================
-const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void }> = ({ onLogin }) => {
+const ApprovalStatusScreen: React.FC<{ status: UserStatus; onLogout: () => void }> = ({ status, onLogout }) => (
+  <div className="min-h-screen flex items-center justify-center bg-emerald-50 px-4">
+    <div className="w-full max-w-md rounded-2xl border border-emerald-100 bg-white p-8 text-center shadow-xl">
+      <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full ${status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+        {status === 'pending' ? <Clock size={26} /> : <AlertCircle size={26} />}
+      </div>
+      <h1 className="text-xl font-bold text-gray-800">
+        {status === 'pending' ? 'Waiting for Admin Approval' : 'Account Not Approved'}
+      </h1>
+      <p className="mt-2 text-sm text-gray-600">
+        {status === 'pending'
+          ? 'Your account is pending review. You will be able to access the portal after a Super Admin approves your account.'
+          : 'Your account was rejected. Please contact a Super Admin for assistance.'}
+      </p>
+      <button onClick={onLogout} className="mt-6 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+        Return to Sign In
+      </button>
+    </div>
+  </div>
+);
+
+const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void; initialError?: string }> = ({ onLogin, initialError }) => {
   const [mode, setMode] = useState<'signin'|'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialError || '');
 
   const handleSignin = async () => {
     setError('');
@@ -1699,8 +1898,9 @@ const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void }> = ({ onLogin }
         { field: 'password', value: password },
       ]);
       if (matches.length === 0) { setError('Invalid credentials.'); setLoading(false); return; }
-      const u = matches[0] as UserRecord;
-      localStorage.setItem('sp_session', JSON.stringify(u));
+      const u = normalizeUser(matches[0]);
+      if (u.status === 'rejected') { setError('Your account has been rejected. Please contact an administrator.'); return; }
+      if (u.status === 'approved') localStorage.setItem('sp_session', JSON.stringify(u));
       onLogin(u);
     } catch (e: any) { setError(e.message || 'Sign in failed.'); }
     finally { setLoading(false); }
@@ -1711,17 +1911,17 @@ const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void }> = ({ onLogin }
     if (!email || !password || !fullName) { setError('All fields are required.'); return; }
     setLoading(true);
     try {
-      const existing = await restList('users');
-      const isFirst = existing.length === 0;
-      const role: Role = isFirst ? 'super_admin' : 'viewer';
       const newUser: Omit<UserRecord,'id'> = {
-        email: email.trim().toLowerCase(), password, full_name: fullName.trim(), role,
-        allowed_modules: isFirst ? MODULES.map(m => m.id) : ['kpi_mgmt'],
-        allowed_factories: [...FACTORIES],
+        email: email.trim().toLowerCase(),
+        password,
+        full_name: fullName.trim(),
+        role: 'viewer',
+        status: 'pending',
+        allowedModules: [],
+        allowedUnits: [],
       };
       const newId = await restCreate('users', newUser);
       const u: UserRecord = { id: newId, ...newUser };
-      localStorage.setItem('sp_session', JSON.stringify(u));
       onLogin(u);
     } catch (e: any) { setError(e.message || 'Sign up failed.'); }
     finally { setLoading(false); }
@@ -1782,7 +1982,7 @@ const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void }> = ({ onLogin }
               )}
             </div>
             <div className="mt-4 p-3 rounded-lg bg-emerald-50/60 border border-emerald-100 text-[11px] text-emerald-700">
-              <Shield size={12} className="inline mr-1" />First registered user becomes <b>super_admin</b>.
+              <Shield size={12} className="inline mr-1" />New accounts require administrator approval before access.
             </div>
           </div>
         </div>

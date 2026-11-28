@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UNIT_DIRECTORY } from '../utils/unitDirectory';
+import type { InventoryRestGet, InventoryRestSet } from '../utils/inventoryDataEntry';
+import {
+  InventorySaveStatus,
+  normalizeNumericInput,
+  useHybridAutoSave,
+  useInventoryGrid,
+} from '../utils/inventoryDataEntry';
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -76,6 +83,9 @@ type CustomMap = Record<string, ItemDef[]>;
 export interface WasteManagementFormProps {
   selectedUnit: string;
   selectedYear: number | string;
+  userRole?: string;
+  restGet?: InventoryRestGet;
+  restSet?: InventoryRestSet;
   [extra: string]: unknown;
 }
 
@@ -86,8 +96,6 @@ const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
-
-const DECIMAL_RE = /^\d*(\.\d{0,2})?$/;
 
 const mk = (prefix: string, labels: string[]): ItemDef[] =>
   labels.map((label, i) => ({ id: `${prefix}_${i + 1}`, label }));
@@ -455,7 +463,8 @@ const resolveUnit = (selectedUnit: string): { fullName: string; address: string 
 /* ------------------------------------------------------------------ */
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
-const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit, selectedYear }) => {
+const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit, selectedYear, userRole, restGet, restSet }) => {
+  const isViewer = userRole === 'viewer';
   const unit = String(selectedUnit ?? '');
   const year = String(selectedYear ?? '');
   const storageKey = `waste_mgmt_${unit}_${year}`;
@@ -464,6 +473,18 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
   const [custom, setCustom] = useState<CustomMap>({});
   const [filters, setFilters] = useState<Filters>(makeDefaultFilters());
   const [loadedKey, setLoadedKey] = useState<string>('');
+  const { gridHandlers, gridError, reportGridError } = useInventoryGrid();
+  const { status, error, saveNow } = useHybridAutoSave({
+    unit,
+    year,
+    moduleId: 'waste_mgmt',
+    storageKey,
+    payload: { data, custom, filters },
+    restGet,
+    restSet,
+    enabled: !isViewer,
+    ready: loadedKey === storageKey,
+  });
   const [filterOpen, setFilterOpen] = useState(false);
   const [dialog, setDialog] = useState<AddDialog | null>(null);
   const filterRef = useRef<HTMLDivElement | null>(null);
@@ -564,20 +585,28 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
 
   /* ---------- Handlers ---------- */
   const handleNumChange = (mi: number, id: string, value: string) => {
-    if (!DECIMAL_RE.test(value)) return;
-    setData((prev) => ({ ...prev, [String(mi)]: { ...(prev[String(mi)] || {}), [id]: value } }));
+    if (isViewer) return;
+    const normalized = normalizeNumericInput(value);
+    if (normalized === null) {
+      reportGridError(value.trim().startsWith('-') ? 'Negative value not allowed' : 'Invalid text pasted in numeric cell');
+      return;
+    }
+    setData((prev) => ({ ...prev, [String(mi)]: { ...(prev[String(mi)] || {}), [id]: normalized } }));
   };
 
   const handleTextChange = (mi: number, id: string, value: string) => {
+    if (isViewer) return;
     setData((prev) => ({ ...prev, [String(mi)]: { ...(prev[String(mi)] || {}), [id]: value } }));
   };
 
   const pushCustomItem = (gid: string, label: string) => {
+    if (isViewer) return;
     const id = `${gid}_c_${Date.now()}`;
     setCustom((prev) => ({ ...prev, [gid]: [...(prev[gid] || []), { id, label, custom: true }] }));
   };
 
   const addItem = (gid: string) => {
+    if (isViewer) return;
     const g = GROUP_MAP[gid];
     if (!g) return;
     // Recycle / Reuse uses a dialog with a Recycle | Reuse dropdown selector.
@@ -592,6 +621,7 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
   };
 
   const confirmDialog = () => {
+    if (isViewer) return;
     if (!dialog) return;
     const name = dialog.name.trim();
     if (!name) return;
@@ -600,6 +630,7 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
   };
 
   const removeItem = (gid: string, id: string) => {
+    if (isViewer) return;
     if (!window.confirm('Remove this item and its entered values?')) return;
     setCustom((prev) => ({ ...prev, [gid]: (prev[gid] || []).filter((it) => it.id !== id) }));
     setData((prev) => {
@@ -777,13 +808,14 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
           {showAdd && addGid && GROUP_MAP[addGid] ? (
             <button
               type="button"
+              hidden={isViewer}
               onClick={() => addItem(addGid)}
               className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
               {GROUP_MAP[addGid].addLabel}
             </button>
           ) : null}
-          {c.removeId && c.groupId ? (
+          {c.removeId && c.groupId && !isViewer ? (
             <button
               type="button"
               title="Remove item"
@@ -819,6 +851,7 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
           <input
             type="text"
             value={(data[String(mi)] || {})[col.id] || ''}
+            disabled={isViewer}
             onChange={(e) => handleTextChange(mi, col.id, e.target.value)}
             placeholder="Remarks"
             className={`w-48 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs shadow-sm outline-none focus:ring-2 ${t.ring}`}
@@ -832,6 +865,7 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
           type="text"
           inputMode="decimal"
           value={(data[String(mi)] || {})[col.id] || ''}
+          disabled={isViewer}
           onChange={(e) => handleNumChange(mi, col.id, e.target.value)}
           placeholder="0.00"
           className={`w-[84px] rounded-md border border-slate-300 bg-white px-2 py-1 text-right text-xs shadow-sm outline-none focus:ring-2 ${t.ring}`}
@@ -842,7 +876,7 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
 
   /* ---------- Render ---------- */
   return (
-    <div className="w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div {...gridHandlers} className="w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       {/* Title + actions */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -853,6 +887,16 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {!isViewer && (
+            <button
+              type="button"
+              onClick={() => { void saveNow(); }}
+              className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
+            >
+              Save Data
+            </button>
+          )}
+          <InventorySaveStatus status={status} error={error} gridError={gridError} />
           <div className="relative" ref={filterRef}>
             <button
               type="button"
@@ -1096,14 +1140,14 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
               >
                 Cancel
               </button>
-              <button
+              {!isViewer && <button
                 type="button"
                 onClick={confirmDialog}
                 disabled={!dialog.name.trim()}
                 className="rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Add Item
-              </button>
+              </button>}
             </div>
           </div>
         </div>

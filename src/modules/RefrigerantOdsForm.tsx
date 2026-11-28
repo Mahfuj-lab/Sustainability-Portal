@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { UNIT_DIRECTORY } from '../utils/unitDirectory';
+import type { InventoryRestGet, InventoryRestSet } from '../utils/inventoryDataEntry';
+import {
+  InventorySaveStatus,
+  normalizeNumericInput,
+  useHybridAutoSave,
+  useInventoryGrid,
+} from '../utils/inventoryDataEntry';
 
 /* -------------------------------------------------------------------------- */
 /*  Types & constants                                                          */
@@ -8,6 +15,9 @@ import { UNIT_DIRECTORY } from '../utils/unitDirectory';
 interface RefrigerantOdsFormProps {
   selectedUnit: string;
   selectedYear: number | string;
+  userRole?: string;
+  restGet?: InventoryRestGet;
+  restSet?: InventoryRestSet;
 }
 
 interface RefrigerantDef {
@@ -236,7 +246,8 @@ const loadStored = (key: string): StoredData => {
 /*  Component                                                                  */
 /* -------------------------------------------------------------------------- */
 
-const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, selectedYear }) => {
+const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, selectedYear, userRole, restGet, restSet }) => {
+  const isViewer = userRole === 'viewer';
   const storageKey = `refrigerant_ods_${selectedUnit}_${selectedYear}`;
   const logoUrl =
     typeof window !== 'undefined' ? `${window.location.origin}/epyllion-logo.png` : '/epyllion-logo.png';
@@ -247,6 +258,18 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
   const [rows, setRows] = useState<MonthRow[]>(emptyRows());
   const [loadedKey, setLoadedKey] = useState<string>('');
   const [factors, setFactors] = useState<Record<string, number>>({});
+  const { gridHandlers, gridError, reportGridError } = useInventoryGrid();
+  const { status, error, saveNow } = useHybridAutoSave({
+    unit: selectedUnit,
+    year: selectedYear,
+    moduleId: 'refrigerant_ods',
+    storageKey,
+    payload: { customRefs, rows },
+    restGet,
+    restSet,
+    enabled: !isViewer,
+    ready: loadedKey === storageKey,
+  });
 
   const [newName, setNewName] = useState('');
   const [newGwp, setNewGwp] = useState('');
@@ -354,17 +377,24 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
 
   /* ---- Handlers ---- */
   const handleKgChange = useCallback((monthIndex: number, refName: string, value: string) => {
-    if (!DECIMAL_REGEX.test(value)) return;
+    if (isViewer) return;
+    const normalized = normalizeNumericInput(value);
+    if (normalized === null) {
+      reportGridError(value.trim().startsWith('-') ? 'Negative value not allowed' : 'Invalid text pasted in numeric cell');
+      return;
+    }
     setRows((prev) =>
-      prev.map((row, i) => (i === monthIndex ? { ...row, values: { ...row.values, [refName]: value } } : row)),
+      prev.map((row, i) => (i === monthIndex ? { ...row, values: { ...row.values, [refName]: normalized } } : row)),
     );
-  }, []);
+  }, [isViewer, reportGridError]);
 
   const handleRemarksChange = useCallback((monthIndex: number, value: string) => {
+    if (isViewer) return;
     setRows((prev) => prev.map((row, i) => (i === monthIndex ? { ...row, remarks: value } : row)));
-  }, []);
+  }, [isViewer]);
 
   const handleAddRefrigerant = () => {
+    if (isViewer) return;
     const name = newName.trim();
     const gwp = parseFloat(newGwp);
     if (!name) {
@@ -387,6 +417,7 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
   };
 
   const handleRemoveRefrigerant = (name: string) => {
+    if (isViewer) return;
     setCustomRefs((prev) => prev.filter((c) => c.name !== name));
     setRows((prev) =>
       prev.map((row) => {
@@ -572,7 +603,7 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
     'w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800 shadow-sm outline-none transition focus:ring-2';
 
   return (
-    <div className="space-y-4 p-4">
+    <div {...gridHandlers} className="space-y-4 p-4">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div>
@@ -582,6 +613,15 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {!isViewer && (
+            <button
+              type="button"
+              onClick={() => { void saveNow(); }}
+              className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+            >
+              Save Data
+            </button>
+          )}
           <button
             type="button"
             onClick={handleDownloadExcel}
@@ -597,6 +637,7 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
             Print / Save PDF
           </button>
         </div>
+        <InventorySaveStatus status={status} error={error} gridError={gridError} />
       </div>
 
       {/* GWP status badge */}
@@ -613,7 +654,7 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
               }`}
             >
               {r.name}: {r.gwp}
-              {r.custom && (
+              {r.custom && !isViewer && (
                 <button
                   type="button"
                   aria-label={`Remove ${r.name}`}
@@ -631,7 +672,7 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
 
       {/* Add refrigerant */}
       <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3">
-        {!showAdd ? (
+        {!showAdd && !isViewer ? (
           <button
             type="button"
             onClick={() => setShowAdd(true)}
@@ -639,7 +680,7 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
           >
             + Add Refrigerant
           </button>
-        ) : (
+        ) : showAdd && !isViewer ? (
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-sm text-violet-900">
               <span className="mb-1 block font-semibold">Refrigerant name</span>
@@ -683,7 +724,7 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
             </button>
             {addError && <p className="w-full text-sm font-medium text-rose-700">{addError}</p>}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Export filter */}
@@ -760,6 +801,7 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
                           type="text"
                           inputMode="decimal"
                           value={rows[mi]?.values[refName] ?? ''}
+                          disabled={isViewer}
                           onChange={(e) => handleKgChange(mi, refName, e.target.value)}
                           placeholder="0.00"
                           className={`${inputBase} text-right ${s.focus}`}
@@ -773,6 +815,7 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
                         <input
                           type="text"
                           value={rows[mi]?.remarks ?? ''}
+                          disabled={isViewer}
                           onChange={(e) => handleRemarksChange(mi, e.target.value)}
                           placeholder="Add a note"
                           className={`${inputBase} ${s.focus}`}

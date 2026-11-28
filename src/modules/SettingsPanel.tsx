@@ -679,7 +679,7 @@ export default function SettingsPanel({
   const canEdit = useMemo<boolean>(() => {
     if (!userRole) return true;
     const role = userRole.toLowerCase();
-    return role === 'admin' || role === 'superadmin' || role === 'manager';
+    return ['admin', 'superadmin', 'super_admin', 'manager', 'editor', 'entry_user'].includes(role);
   }, [userRole]);
 
   const handleFactorChange = (id: string, field: 'kgCO2ePerUnit' | 'mjPerUnit', value: string): void => {
@@ -994,6 +994,7 @@ export default function SettingsPanel({
                 <button
                   type="button"
                   onClick={handleAddYear}
+                  hidden={!canEdit}
                   className="px-3 py-1.5 text-sm font-semibold rounded-md border border-dashed border-emerald-500 text-emerald-700 hover:bg-emerald-50"
                 >
                   + Add Year
@@ -1214,7 +1215,7 @@ export default function SettingsPanel({
               <button
                 type="button"
                 onClick={handleSaveYearFactors}
-                disabled={!canEdit}
+                hidden={!canEdit}
                 className="px-5 py-2 text-sm font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
               >
                 Save Factors for {selectedFactorYear}
@@ -1253,7 +1254,8 @@ export default function SettingsPanel({
                     <button
                       type="button"
                       onClick={handleResetLogo}
-                      disabled={!canEdit || brandLogo === DEFAULT_LOGO_URL}
+                      hidden={!canEdit}
+                      disabled={brandLogo === DEFAULT_LOGO_URL}
                       className="px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Reset to Default Logo
@@ -1315,6 +1317,7 @@ export default function SettingsPanel({
                   <select
                     value={addingCustomUnit ? CUSTOM_UNIT_OPTION : selectedUnit}
                     onChange={(e) => handleUnitSelectChange(e.target.value)}
+                    disabled={!canEdit}
                     className="mt-1 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
                     {unitOptions.map((u) => (
@@ -1353,7 +1356,7 @@ export default function SettingsPanel({
                       <button
                         type="button"
                         onClick={handleConfirmCustomUnit}
-                        disabled={!canEdit}
+                        hidden={!canEdit}
                         className="px-3 py-1.5 text-xs font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Add unit
@@ -1430,7 +1433,7 @@ export default function SettingsPanel({
                     <button
                       type="button"
                       onClick={handleSaveUnitConfig}
-                      disabled={!canEdit}
+                      hidden={!canEdit}
                       className="px-5 py-2 text-sm font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                     >
                       Save Unit Stamp &amp; Signatures
@@ -1509,6 +1512,7 @@ export default function SettingsPanel({
                               setAddingCustomUnit(false);
                               selectUnit(code);
                             }}
+                            hidden={!canEdit}
                             className="px-3 py-1.5 text-xs font-semibold rounded-md border border-emerald-500 text-emerald-700 hover:bg-emerald-50"
                           >
                             Edit
@@ -1516,7 +1520,7 @@ export default function SettingsPanel({
                           <button
                             type="button"
                             onClick={() => handleRemoveUnitConfig(code)}
-                            disabled={!canEdit}
+                            hidden={!canEdit}
                             className="px-3 py-1.5 text-xs font-semibold rounded-md border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Remove
@@ -1621,6 +1625,7 @@ export default function SettingsPanel({
                         <button
                           type="button"
                           onClick={() => handleRemoveCustomFactor(f.id)}
+                          hidden={!canEdit}
                           className="text-xs text-red-600 hover:text-red-700 font-medium"
                         >
                           Remove
@@ -1637,6 +1642,7 @@ export default function SettingsPanel({
             <button
               type="button"
               onClick={handleAddCustomFactor}
+              hidden={!canEdit}
               className="px-4 py-2 text-sm font-medium rounded-md border border-dashed border-emerald-500 text-emerald-700 hover:bg-emerald-50"
             >
               + Add Custom Factor
@@ -1648,7 +1654,7 @@ export default function SettingsPanel({
               <button
                 type="button"
                 onClick={handleSaveFactors}
-                disabled={!canEdit}
+                hidden={!canEdit}
                 className="px-5 py-2 text-sm font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Save Factors
@@ -1713,7 +1719,7 @@ export default function SettingsPanel({
                   <button
                     type="button"
                     onClick={() => handleToggleLock(unit)}
-                    disabled={!canEdit}
+                    hidden={!canEdit}
                     className={
                       'px-3 py-1.5 text-xs font-semibold rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ' +
                       (state.locked
@@ -1765,7 +1771,7 @@ export default function SettingsPanel({
             <button
               type="button"
               onClick={handleSaveLock}
-              disabled={!canEdit}
+              hidden={!canEdit}
               className="px-5 py-2 text-sm font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Save Lock Settings
@@ -1833,7 +1839,7 @@ export default function SettingsPanel({
                   <button
                     type="button"
                     onClick={() => handleAlertChange(item.key, value === true ? false : true)}
-                    disabled={!canEdit}
+                    hidden={!canEdit}
                     aria-pressed={value}
                     className={
                       'relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ' +
@@ -1857,7 +1863,7 @@ export default function SettingsPanel({
             <button
               type="button"
               onClick={handleSaveAlerts}
-              disabled={!canEdit}
+              hidden={!canEdit}
               className="px-5 py-2 text-sm font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Save Alert Rules

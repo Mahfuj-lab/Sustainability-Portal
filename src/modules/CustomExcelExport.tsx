@@ -5,6 +5,7 @@ export interface CustomExcelExportProps {
   selectedUnit?: string;
   selectedYear?: string;
   userRole?: string;
+  allowedUnits?: string[];
   restGet?: (...args: any[]) => Promise<any>;
   [key: string]: any;
 }
@@ -210,9 +211,10 @@ export default function CustomExcelExport({
   selectedUnit,
   selectedYear,
   userRole,
+  allowedUnits,
   restGet,
 }: CustomExcelExportProps) {
-  const unitCodes: string[] = useMemo<string[]>(() => {
+  const allUnitCodes: string[] = useMemo<string[]>(() => {
     const directory = UNIT_DIRECTORY as unknown;
     if (Array.isArray(directory)) {
       return (directory as UnitInfo[]).map((u) => u.code).filter(Boolean);
@@ -224,6 +226,7 @@ export default function CustomExcelExport({
     }
     return ['EKWL', 'DKL', 'DDL', 'EKWL-HW', 'ESL', 'ESL-Extention', 'EFL', 'EKL', 'EPL', 'EWL'];
   }, []);
+  const unitCodes = allowedUnits ? allUnitCodes.filter((code) => allowedUnits.includes(code)) : allUnitCodes;
 
   const [activeTemplate, setActiveTemplate] = useState<string>('custom');
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
@@ -397,7 +400,7 @@ export default function CustomExcelExport({
               onClick={toggleAllUnits}
               className="text-xs font-semibold px-3 py-1 rounded-md border border-emerald-500 text-emerald-700 hover:bg-emerald-50"
             >
-              {units.length === unitCodes.length ? 'Deselect All 10 Units' : 'Select All 10 Units'}
+              {units.length === unitCodes.length ? `Deselect All ${unitCodes.length} Units` : `Select All ${unitCodes.length} Units`}
             </button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">

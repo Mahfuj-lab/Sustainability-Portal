@@ -7,6 +7,7 @@ import BoilerGeneratorCompressorForm from './BoilerGeneratorCompressorForm';
 import NaturalGasDieselVehiclesForm from './NaturalGasDieselVehiclesForm';
 import PurchaseElectricitySolarForm from './PurchaseElectricitySolarForm';
 import ProductionOperationsForm from './ProductionOperationsForm';
+import type { InventoryRestGet, InventoryRestSet } from '../utils/inventoryDataEntry';
 import { 
   Factory, Zap, Flame, BarChart3, Droplets, Trash2, 
   Wind, Beaker, Activity, Shield, Settings, Info,
@@ -21,6 +22,8 @@ interface InventoryManagementProps {
   selectedUnit: string;
   selectedYear: string;
   userRole: string;
+  restSet?: InventoryRestSet;
+  restGet?: InventoryRestGet;
 }
 
 // ============================================================
@@ -88,6 +91,11 @@ const SUB_MODULES_MAP: Record<string, { title: string; icon: React.ElementType; 
     icon: BarChart3,
     description: 'Auto-calculated greenhouse gas inventory and KPI summary based on energy data.'
   },
+  'inv_ghg_summary': {
+    title: 'GHG Emission',
+    icon: BarChart3,
+    description: 'Auto-calculated greenhouse gas inventory and KPI summary based on inventory activity data.'
+  },
   'inv_water_wastewater': { 
     title: 'Water & Wastewater', 
     icon: Droplets,
@@ -132,7 +140,9 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({
   activeSubModule, 
   selectedUnit, 
   selectedYear, 
-  userRole 
+  userRole,
+  restSet,
+  restGet,
 }) => {
   // Fallback if the ID doesn't match
   const currentModule = SUB_MODULES_MAP[activeSubModule] || {
@@ -140,31 +150,31 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({
     icon: Info,
     description: 'Module details not found.'
   };
-if (activeSubModule === 'inv_refrigerant') {
-  return <RefrigerantOdsForm selectedUnit={selectedUnit} selectedYear={selectedYear} />;
+if (activeSubModule === 'inv_refrigerant' || activeSubModule === 'inv_refrigerant_ods') {
+  return <RefrigerantOdsForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} restGet={restGet} restSet={restSet} />;
 }
 
   const Icon = currentModule.icon;
   if (activeSubModule === 'inv_production_operations') {
-    return <ProductionOperationsForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
+    return <ProductionOperationsForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} restGet={restGet} restSet={restSet} />;
   }
 if (activeSubModule === 'inv_electricity_solar') {
-  return <PurchaseElectricitySolarForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
+  return <PurchaseElectricitySolarForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} restGet={restGet} restSet={restSet} />;
 }
   if (activeSubModule === 'inv_fuel_vehicles') {
-    return <NaturalGasDieselVehiclesForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
+    return <NaturalGasDieselVehiclesForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} restGet={restGet} restSet={restSet} />;
   }
-  if (activeSubModule === 'inv_steam_boiler') {
-    return <BoilerGeneratorCompressorForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} />;
+  if (activeSubModule === 'inv_steam_boiler' || activeSubModule === 'inv_boiler_gen_comp') {
+    return <BoilerGeneratorCompressorForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} restGet={restGet} restSet={restSet} />;
   }
-  if (activeSubModule === 'inv_water_withdrawal') {
-    return <WaterWithdrawalForm selectedUnit={selectedUnit} selectedYear={selectedYear}  />;
+  if (activeSubModule === 'inv_water_withdrawal' || activeSubModule === 'inv_water_wastewater') {
+    return <WaterWithdrawalForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} restGet={restGet} restSet={restSet} />;
   }
-if (activeSubModule === 'inv_solid_waste') {
-  return <WasteManagementForm selectedUnit={selectedUnit} selectedYear={selectedYear} />;
+if (activeSubModule === 'inv_solid_waste' || activeSubModule === 'inv_waste_management') {
+  return <WasteManagementForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} restGet={restGet} restSet={restSet} />;
 }
       if (activeSubModule === 'inv_ghg_summary' || activeSubModule === 'inv_ghg_emission') {
-    return <GhgEmissionSummaryForm selectedUnit={selectedUnit} selectedYear={selectedYear} />;
+        return <GhgEmissionSummaryForm selectedUnit={selectedUnit} selectedYear={selectedYear} userRole={userRole} restGet={restGet} restSet={restSet} />;
   }
   return (
     <div className="space-y-6">

@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Plus, X, Printer, CheckCircle2, AlertCircle, FileSpreadsheet, Lock } from 'lucide-react';
 import { UNIT_DIRECTORY } from '../utils/unitDirectory';
+import {
+  InventorySaveStatus,
+  normalizeNumericInput,
+  useHybridAutoSave,
+  useInventoryGrid,
+} from '../utils/inventoryDataEntry';
 
 export interface BoilerGeneratorCompressorFormProps {
   selectedUnit: string;
@@ -169,15 +175,12 @@ const getUnitInfo = (code: string) => {
   return fallback;
 };
 
-const isValidNumber = (val: string): boolean => {
-  if (val === '') return true;
-  return /^\d*(\.\d{0,2})?$/.test(val);
-};
-
 export default function BoilerGeneratorCompressorForm({
   selectedUnit,
   selectedYear,
   userRole,
+  restGet,
+  restSet,
 }: BoilerGeneratorCompressorFormProps) {
   const isViewer = userRole === 'viewer';
   const safeUnit = selectedUnit || 'UNKNOWN';
@@ -205,6 +208,19 @@ export default function BoilerGeneratorCompressorForm({
   const [data, setData] = useState<FormData>({});
   const [isSaved, setIsSaved] = useState(false);
   const [syncStatus, setSyncStatus] = useState({ ngDiesel: false, elecSolar: false });
+  const [loadedKey, setLoadedKey] = useState('');
+  const { gridHandlers, gridError, reportGridError } = useInventoryGrid();
+  const { status, error, saveNow } = useHybridAutoSave({
+    unit: safeUnit,
+    year: safeYear,
+    moduleId: 'boiler_gen_comp',
+    storageKey,
+    payload: { compressors, data },
+    restGet,
+    restSet,
+    enabled: !isViewer,
+    ready: loadedKey === storageKey,
+  });
 
   const [sections, setSections] = useState({
     generator: true,
@@ -383,22 +399,28 @@ export default function BoilerGeneratorCompressorForm({
       }
     }
 
+    setLoadedKey(storageKey);
   }, [storageKey, ngDieselKey, elecSolarKey]);
 
   const handleSave = () => {
     if (isViewer) return;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify({ compressors, data }));
+    void saveNow().then((saved) => {
+      if (!saved) return;
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
-    } catch (e) {
-      alert('Failed to save data.');
-    }
+    });
   };
 
   const updateMonthField = (month: string, field: keyof MonthData, value: string) => {
     if (isViewer) return;
-    if (typeof value === 'string' && !isValidNumber(value) && field !== 'remarks') return;
+    if (field !== 'remarks') {
+      const normalized = normalizeNumericInput(value);
+      if (normalized === null) {
+        reportGridError(value.trim().startsWith('-') ? 'Negative value not allowed' : 'Invalid text pasted in numeric cell');
+        return;
+      }
+      value = normalized;
+    }
     setData(prev => ({
       ...prev,
       [month]: {
@@ -410,7 +432,12 @@ export default function BoilerGeneratorCompressorForm({
 
   const updateNestedQty = (month: string, section: keyof MonthData, id: string, value: string) => {
     if (isViewer) return;
-    if (!isValidNumber(value)) return;
+    const normalized = normalizeNumericInput(value);
+    if (normalized === null) {
+      reportGridError(value.trim().startsWith('-') ? 'Negative value not allowed' : 'Invalid text pasted in numeric cell');
+      return;
+    }
+    value = normalized;
 
     setData(prev => {
       const prevMonth = prev[month] || getEmptyMonth();
@@ -763,7 +790,7 @@ export default function BoilerGeneratorCompressorForm({
   );
 
   return (
-    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-2xl shadow-md border border-slate-200">
+    <div {...gridHandlers} className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-2xl shadow-md border border-slate-200">
       {/* Page header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
         <div>
@@ -799,6 +826,7 @@ export default function BoilerGeneratorCompressorForm({
               <CheckCircle2 size={16} /> Saved
             </span>
           )}
+          <InventorySaveStatus status={status} error={error} gridError={gridError} />
 
           <button
             onClick={handleExport}

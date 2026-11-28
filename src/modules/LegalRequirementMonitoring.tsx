@@ -58,13 +58,13 @@ const LegalRequirementMonitoring: React.FC<LegalRequirementMonitoringProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <button 
-              disabled={isViewer}
+              hidden={isViewer}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors disabled:opacity-50"
             >
               <Plus size={14} /> Add Row
             </button>
             <button 
-              disabled={isViewer}
+              hidden={isViewer}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm disabled:opacity-50"
             >
               <Save size={14} /> Save

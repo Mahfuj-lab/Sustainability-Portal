@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Plus, X, Printer, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import { UNIT_DIRECTORY } from '../utils/unitDirectory';
+import {
+  InventorySaveStatus,
+  normalizeNumericInput,
+  useHybridAutoSave,
+  useInventoryGrid,
+} from '../utils/inventoryDataEntry';
 
 export interface ProductionOperationsFormProps {
   selectedUnit: string;
@@ -179,15 +185,12 @@ const getUnitInfo = (code: string) => {
   return fallback;
 };
 
-const isValidNumber = (val: string): boolean => {
-  if (val === '') return true;
-  return /^\d*(\.\d{0,2})?$/.test(val);
-};
-
 export default function ProductionOperationsForm({
   selectedUnit,
   selectedYear,
   userRole,
+  restGet,
+  restSet,
 }: ProductionOperationsFormProps) {
   const isViewer = userRole === 'viewer';
   const safeUnit = selectedUnit || 'UNKNOWN';
@@ -203,6 +206,19 @@ export default function ProductionOperationsForm({
 
   const [data, setData] = useState<FormData>({});
   const [isSaved, setIsSaved] = useState(false);
+  const [loadedKey, setLoadedKey] = useState('');
+  const { gridHandlers, gridError, reportGridError } = useInventoryGrid();
+  const { status, error, saveNow } = useHybridAutoSave({
+    unit: safeUnit,
+    year: safeYear,
+    moduleId: 'prod_ops',
+    storageKey,
+    payload: { buyers, data },
+    restGet,
+    restSet,
+    enabled: !isViewer,
+    ready: loadedKey === storageKey,
+  });
 
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({
     ops: true,
@@ -264,22 +280,28 @@ export default function ProductionOperationsForm({
       setData(initialData);
       setBuyers([{ id: 'b1', name: '' }, { id: 'b2', name: '' }, { id: 'b3', name: '' }]);
     }
+    setLoadedKey(storageKey);
   }, [storageKey]);
 
   const handleSave = () => {
     if (isViewer) return;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify({ buyers, data }));
+    void saveNow().then((saved) => {
+      if (!saved) return;
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
-    } catch (e) {
-      alert('Failed to save data to local storage.');
-    }
+    });
   };
 
   const updateMonthField = (month: string, field: keyof MonthData, value: string) => {
     if (isViewer) return;
-    if (['manPower', 'workingDays', 'availableHour', 'produceHour', 'totalMTO', 'efficiency', 'averageSMV'].includes(field) && !isValidNumber(value)) return;
+    if (['manPower', 'workingDays', 'availableHour', 'produceHour', 'totalMTO', 'efficiency', 'averageSMV'].includes(field)) {
+      const normalized = normalizeNumericInput(value);
+      if (normalized === null) {
+        reportGridError(value.trim().startsWith('-') ? 'Negative value not allowed' : 'Invalid text pasted in numeric cell');
+        return;
+      }
+      value = normalized;
+    }
     
     setData(prev => ({
       ...prev,
@@ -292,7 +314,12 @@ export default function ProductionOperationsForm({
 
   const updateBuyerQty = (month: string, section: 'prodPcs' | 'shipPcs' | 'shipKg' | 'shipSam', buyerId: string, value: string) => {
     if (isViewer) return;
-    if (!isValidNumber(value)) return;
+    const normalized = normalizeNumericInput(value);
+    if (normalized === null) {
+      reportGridError(value.trim().startsWith('-') ? 'Negative value not allowed' : 'Invalid text pasted in numeric cell');
+      return;
+    }
+    value = normalized;
 
     setData(prev => {
       const prevMonth = prev[month] || getEmptyMonth();
@@ -590,7 +617,7 @@ export default function ProductionOperationsForm({
   const opsFooterFields = ['manPower', 'workingDays', 'availableHour', 'produceHour', 'totalMTO'] as const;
 
   return (
-    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm border border-slate-200">
+    <div {...gridHandlers} className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm border border-slate-200">
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Production &amp; Operations</h1>
@@ -616,6 +643,7 @@ export default function ProductionOperationsForm({
               <CheckCircle2 size={16} /> Saved
             </span>
           )}
+          <InventorySaveStatus status={status} error={error} gridError={gridError} />
 
           <button
             onClick={handleExport}

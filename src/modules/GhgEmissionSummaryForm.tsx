@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { UNIT_DIRECTORY } from '../utils/unitDirectory';
+import type { InventoryRestSet } from '../utils/inventoryDataEntry';
+import {
+  InventorySaveStatus,
+  useHybridAutoSave,
+} from '../utils/inventoryDataEntry';
 
 /* ============================================================================
  * GHG Emission Summary (Scope 1, 2, 3)  —  inv_ghg_emission
@@ -9,11 +14,14 @@ import { UNIT_DIRECTORY } from '../utils/unitDirectory';
 interface GhgEmissionSummaryFormProps {
   selectedUnit: string;
   selectedYear: number | string;
+  userRole?: string;
+  restGet?: (path: string) => Promise<any>;
+  restSet?: InventoryRestSet;
 }
 
 type GhgUnit = 'kg CO₂e' | 'Ton CO₂e';
 type ShipUnit = 'pcs' | 'kg';
-type Grp = 's1' | 'veh' | 's2' | 'tot' | 'kpi';
+type Grp = 's1' | 'veh' | 's2' | 's3' | 'tot' | 'kpi';
 
 interface Factors {
   ngKgCo2PerM3: number;
@@ -34,6 +42,11 @@ interface Raw {
   elec: number;
   pcs: number;
   kg: number;
+  scope3WasteKg: number;
+  scope3WastewaterM3: number;
+  scope3ChemicalQty: number;
+  scope3CommutingKm: number;
+  scope3LogisticsTkm: number;
 }
 
 interface Calc {
@@ -57,6 +70,11 @@ interface Calc {
   s12: number;
   ship: number;
   kpi: number;
+  scope3WasteKg: number;
+  scope3WastewaterM3: number;
+  scope3ChemicalQty: number;
+  scope3CommutingKm: number;
+  scope3LogisticsTkm: number;
 }
 
 interface Col {
@@ -72,6 +90,7 @@ interface ExportFilters {
   s1: boolean;
   veh: boolean;
   s2: boolean;
+  s3: boolean;
   tot: boolean;
   kpi: boolean;
   remarks: boolean;
@@ -92,11 +111,13 @@ const DEFAULT_FACTORS: Factors = {
 
 const EMPTY_RAW: Raw = {
   ng: 0, dsl: 0, ref: 0, refGhgKg: 0, vCng: 0, vDsl: 0, vPet: 0, elec: 0, pcs: 0, kg: 0,
+  scope3WasteKg: 0, scope3WastewaterM3: 0, scope3ChemicalQty: 0, scope3CommutingKm: 0, scope3LogisticsTkm: 0,
 };
 
 const NUM_KEYS: (keyof Calc)[] = [
   'ng', 'ghgNg', 'dsl', 'ghgDsl', 'ref', 'ghgRef', 'vCng', 'ghgVCng', 'vDsl', 'ghgVDsl',
   'vPet', 'ghgVPet', 'vTot', 'elec', 'ghgElec', 's1', 's2', 's12', 'ship',
+  'scope3WasteKg', 'scope3WastewaterM3', 'scope3ChemicalQty', 'scope3CommutingKm', 'scope3LogisticsTkm',
 ];
 
 /* ----------------------------- Colour theme ------------------------------ */
@@ -104,6 +125,7 @@ const THEME: Record<Grp, { head: string; sub: string; cell: string; text: string
   s1: { head: '#7dd3fc', sub: '#bae6fd', cell: '#f0f9ff', text: '#0c4a6e' },
   veh: { head: '#fcd34d', sub: '#fde68a', cell: '#fffbeb', text: '#78350f' },
   s2: { head: '#6ee7b7', sub: '#a7f3d0', cell: '#ecfdf5', text: '#064e3b' },
+  s3: { head: '#c4b5fd', sub: '#ddd6fe', cell: '#f5f3ff', text: '#4c1d95' },
   tot: { head: '#5eead4', sub: '#99f6e4', cell: '#f0fdfa', text: '#134e4a' },
   kpi: { head: '#d8b4fe', sub: '#e9d5ff', cell: '#faf5ff', text: '#581c87' },
 };
@@ -130,6 +152,11 @@ const COLS: Col[] = [
   { id: 'vTot', grp: 'veh', kind: 'calc', dec: 2, label: (g) => `Total Vehicles GHG (${g})`, get: (r) => r.vTot },
   { id: 'elec', grp: 's2', kind: 'synced', dec: 2, label: () => 'Total Purchase Electricity (kWh)', get: (r) => r.elec },
   { id: 'ghgElec', grp: 's2', kind: 'calc', dec: 2, label: (g) => `GHG from Purchase Electricity (${g})`, get: (r) => r.ghgElec },
+  { id: 'scope3WasteKg', grp: 's3', kind: 'synced', dec: 2, label: () => 'Waste Generated (kg activity)', get: (r) => r.scope3WasteKg },
+  { id: 'scope3WastewaterM3', grp: 's3', kind: 'synced', dec: 2, label: () => 'Wastewater Discharged (m³ activity)', get: (r) => r.scope3WastewaterM3 },
+  { id: 'scope3ChemicalQty', grp: 's3', kind: 'synced', dec: 2, label: () => 'Chemical Use (reported activity)', get: (r) => r.scope3ChemicalQty },
+  { id: 'scope3CommutingKm', grp: 's3', kind: 'synced', dec: 2, label: () => 'Employee Commuting (km activity)', get: (r) => r.scope3CommutingKm },
+  { id: 'scope3LogisticsTkm', grp: 's3', kind: 'synced', dec: 2, label: () => 'Logistics (tonne-km activity)', get: (r) => r.scope3LogisticsTkm },
   { id: 's1', grp: 'tot', kind: 'calc', dec: 2, label: (g) => `Total Scope 1 GHG (${g})`, get: (r) => r.s1 },
   { id: 's2', grp: 'tot', kind: 'calc', dec: 2, label: (g) => `Total Scope 2 GHG (${g})`, get: (r) => r.s2 },
   { id: 's12', grp: 'tot', kind: 'calc', dec: 2, label: (g) => `Total Scope 1 & 2 GHG (${g})`, get: (r) => r.s12 },
@@ -192,40 +219,52 @@ const pick = (m: Record<string, number>, rules: Rule[]): number => {
   return 0;
 };
 
-const loadMonthly = (key: string): Record<string, number>[] => {
-  const out: Record<string, number>[] = Array.from({ length: 12 }, () => ({}));
+const loadModulePayload = (key: string, remote?: any): any => {
   try {
     const raw = localStorage.getItem(key);
-    if (!raw) return out;
-    let data: any = JSON.parse(raw);
-    if (data && !Array.isArray(data) && typeof data === 'object') {
-      const arr = ['rows', 'data', 'months', 'entries', 'monthly']
-        .map((k) => data[k])
-        .find((v) => Array.isArray(v));
-      if (arr) data = arr;
-    }
-    if (Array.isArray(data)) {
-      data.forEach((row: any, i: number) => {
-        let idx = i;
-        const mv = row && (row.month ?? row.Month);
-        if (typeof mv === 'string') {
-          const mi = MONTHS.findIndex((m) => mv.toLowerCase().startsWith(m.slice(0, 3).toLowerCase()));
-          if (mi >= 0) idx = mi;
-        }
-        if (idx >= 0 && idx < 12) out[idx] = flatten(row);
-      });
-    } else if (data && typeof data === 'object') {
-      MONTHS.forEach((m, i) => {
-        const hit = Object.keys(data).find(
-          (k) => k.toLowerCase().startsWith(m.slice(0, 3).toLowerCase()) || k === String(i + 1)
-        );
-        if (hit) out[i] = flatten(data[hit]);
-      });
-    }
+    if (raw) return JSON.parse(raw);
   } catch {
-    /* ignore corrupted storage */
+    /* Fall through to the synced record when local data is corrupt. */
   }
-  return out;
+  return remote?.data ?? remote ?? null;
+};
+
+const monthRecord = (payload: any, index: number): any => {
+  if (!payload || typeof payload !== 'object') return {};
+  const root = payload.data ?? payload.months ?? payload.rows ?? payload.entries ?? payload.monthly ?? payload;
+  if (Array.isArray(root)) return root[index] ?? {};
+  if (!root || typeof root !== 'object') return {};
+  const monthName = MONTHS[index];
+  return root[monthName] ?? root[String(index)] ?? root[String(index + 1)] ?? {};
+};
+
+const amount = (value: unknown): number => {
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : 0;
+  if (typeof value !== 'string') return 0;
+  const parsed = Number(value.replace(/,/g, '').trim());
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+const sumNumeric = (value: any, depth = 0): number => {
+  if (depth > 4 || value === null || value === undefined) return 0;
+  if (typeof value === 'number' || typeof value === 'string') return amount(value);
+  if (Array.isArray(value)) return value.reduce((sum, item) => sum + sumNumeric(item, depth + 1), 0);
+  if (typeof value === 'object') return Object.values(value).reduce((sum: number, item: any) => sum + sumNumeric(item, depth + 1), 0);
+  return 0;
+};
+
+const sumNamedFields = (row: any, fields: string[]): number =>
+  fields.reduce((sum, field) => sum + sumNumeric(row?.[field]), 0);
+
+const sumMatchingFields = (row: any, accepted: string[], excluded: string[] = [], depth = 0): number => {
+  if (!row || typeof row !== 'object' || depth > 4) return 0;
+  return Object.entries(row).reduce((sum, [key, value]) => {
+    const normalized = norm(key);
+    if (value && typeof value === 'object') return sum + sumMatchingFields(value, accepted, excluded, depth + 1);
+    return accepted.some((token) => normalized.includes(token)) && !excluded.some((token) => normalized.includes(token))
+      ? sum + amount(value)
+      : sum;
+  }, 0);
 };
 
 const loadFactors = (year: number | string): Factors => {
@@ -248,60 +287,109 @@ const loadFactors = (year: number | string): Factors => {
   return f;
 };
 
-const buildRaws = (unit: string, year: number | string): Raw[] => {
-  const a = loadMonthly(`ng_diesel_veh_${unit}_${year}`);
-  const b = loadMonthly(`refrigerant_ods_${unit}_${year}`);
-  const c = loadMonthly(`elec_solar_${unit}_${year}`);
-  const d = loadMonthly(`prod_ops_${unit}_${year}`);
-  const bad = ['ghg', 'co2', 'emission', 'cost', 'bdt'];
+const buildRaws = (unit: string, year: number | string, remote: Record<string, any> = {}): Raw[] => {
+  const ngPayload = loadModulePayload(`ng_diesel_veh_${unit}_${year}`, remote.ng_diesel_veh);
+  const boilerPayload = loadModulePayload(`boiler_gen_comp_${unit}_${year}`, remote.boiler_gen_comp);
+  const refrigerantPayload = loadModulePayload(`refrigerant_ods_${unit}_${year}`, remote.refrigerant_ods);
+  const electricityPayload = loadModulePayload(`elec_solar_${unit}_${year}`, remote.elec_solar);
+  const productionPayload = loadModulePayload(`prod_ops_${unit}_${year}`, remote.prod_ops);
+  const wastePayload = loadModulePayload(`waste_mgmt_${unit}_${year}`, remote.waste_mgmt);
+  const waterPayload = loadModulePayload(`water_withdrawal_${unit}_${year}`, remote.water_withdrawal);
+  const wastewaterPayload = loadModulePayload(`wastewater_etp_${unit}_${year}`, remote.wastewater_etp);
+  const chemicalPayload = loadModulePayload(`chemical_zdhc_${unit}_${year}`, remote.chemical_zdhc);
+  const commutingPayload = loadModulePayload(`commuting_logistics_${unit}_${year}`, remote.commuting_logistics);
+  const bad = ['ghg', 'co2', 'emission', 'cost', 'bdt', 'tk'];
+
+  const gwpSettings: Record<string, number> = {
+    r22: 1810, r407c: 1774, r410a: 2088, r134a: 1430, r32: 675,
+  };
+  try {
+    const allFactors = JSON.parse(localStorage.getItem('sustainability_factors_by_year') || '{}');
+    const yearFactors = allFactors[String(year)] || {};
+    Object.entries(yearFactors).forEach(([name, value]) => {
+      const factor = amount(value);
+      if (factor > 0) gwpSettings[norm(name)] = factor;
+    });
+  } catch {
+    /* Use the documented defaults when no year settings exist. */
+  }
+
   return MONTHS.map((_, i) => {
-    const ma = a[i], mb = b[i], mc = c[i], md = d[i];
-    let dsl = pick(ma, [{ inc: ['total', 'diesel'], exc: ['veh', ...bad] }]);
-    if (!dsl) {
-      dsl =
-        pick(ma, [{ inc: ['boiler', 'diesel'], exc: bad }]) +
-        pick(ma, [{ inc: ['generator', 'diesel'], exc: bad }]);
-    }
+    const ngRow = monthRecord(ngPayload, i);
+    const boilerRow = monthRecord(boilerPayload, i);
+    const refrigerantRow = monthRecord(refrigerantPayload, i);
+    const electricityRow = monthRecord(electricityPayload, i);
+    const productionRow = monthRecord(productionPayload, i);
+    const wasteRow = monthRecord(wastePayload, i);
+    const waterRow = monthRecord(waterPayload, i);
+    const wastewaterRow = monthRecord(wastewaterPayload, i);
+    const chemicalRow = monthRecord(chemicalPayload, i);
+    const commutingRow = monthRecord(commutingPayload, i);
+
+    const ng = sumNumeric(ngRow.ngValues) || sumNamedFields(ngRow, ['naturalGasValues', 'naturalGas']) ||
+      sumNumeric(boilerRow.boilerNgValues);
+    const ngDiesel = sumNumeric(ngRow.genDieselValues) + sumNumeric(ngRow.boilerDieselValues);
+    const boilerDiesel = sumNumeric(boilerRow.genDieselValues) + sumNumeric(boilerRow.boilerDieselValues);
+    const dsl = ngDiesel || boilerDiesel || pick(flatten(ngRow), [
+      { inc: ['total', 'diesel'], exc: ['veh', ...bad] },
+      { inc: ['diesel', 'liter'], exc: ['veh', ...bad] },
+    ]);
+
+    const refrigerantValues = refrigerantRow.values && typeof refrigerantRow.values === 'object' ? refrigerantRow.values : {};
+    const customRefs = Array.isArray(refrigerantPayload?.customRefs) ? refrigerantPayload.customRefs : [];
+    const refrigerantGwp = { ...gwpSettings };
+    customRefs.forEach((ref: any) => {
+      if (ref?.name && amount(ref.gwp)) refrigerantGwp[norm(String(ref.name))] = amount(ref.gwp);
+    });
+    const refrigerantKg = sumNumeric(refrigerantValues);
+    const refGhgKg = Object.entries(refrigerantValues).reduce((sum, [name, value]) =>
+      sum + amount(value) * (refrigerantGwp[norm(name)] || 0), 0);
+
+    const electricity = sumNamedFields(electricityRow, ['offPeak', 'peak', 'flat']) ||
+      pick(flatten(electricityRow), [
+        { inc: ['purchase', 'electricity', 'kwh'], exc: ['solar', ...bad] },
+        { inc: ['grid', 'kwh'], exc: ['solar', ...bad] },
+      ]);
+
+    const ngFlat = flatten(ngRow);
+    const productionFlat = flatten(productionRow);
+    const totalNg = ng || pick(ngFlat, [
+      { inc: ['natural', 'gas'], exc: ['cng', 'diesel', 'veh', ...bad] },
+      { inc: ['ng', 'm3'], exc: ['cng', 'diesel', 'veh', ...bad] },
+    ]);
+
+    const wasteKg = sumNumeric(wasteRow);
+    const explicitWastewaterDischarge = [
+      wastewaterRow.wastewaterDischarge,
+      wastewaterRow.discharge,
+      wastewaterRow.effluentFlow,
+      wastewaterRow.outletFlow,
+    ].map(amount).find((value) => value > 0) || 0;
+    const waterDischarge = explicitWastewaterDischarge || amount(waterRow.discharge) ||
+      Math.max(0, (amount(waterRow.mDomestic) + amount(waterRow.gDomestic)) * 0.9 + amount(waterRow.boiler));
+
     return {
-      ng: pick(ma, [
-        { inc: ['total', 'ng'], exc: ['cng', 'diesel', 'veh', 'generator', 'boiler', ...bad] },
-        { inc: ['natural', 'gas'], exc: bad },
-      ]),
+      ng: totalNg,
       dsl,
-      vCng: pick(ma, [{ inc: ['veh', 'cng'], exc: bad }, { inc: ['cng'], exc: [...bad, 'total'] }]),
-      vDsl: pick(ma, [{ inc: ['veh', 'diesel'], exc: bad }]),
-      vPet: pick(ma, [
-        { inc: ['veh', 'petrol'], exc: bad },
-        { inc: ['veh', 'octane'], exc: bad },
-        { inc: ['petrol'], exc: bad },
-        { inc: ['octane'], exc: bad },
+      vCng: amount(ngRow.vehCngM3),
+      vDsl: amount(ngRow.vehDieselL),
+      vPet: amount(ngRow.vehOctaneL),
+      ref: refrigerantKg || sumMatchingFields(refrigerantRow, ['refrigerantkg', 'totalrefrigerant']),
+      refGhgKg: refGhgKg || pick(flatten(refrigerantRow), [
+        { inc: ['total', 'ghg'] }, { inc: ['total', 'co2'] }, { inc: ['co2e'] }, { inc: ['total', 'emission'] },
       ]),
-      ref: pick(mb, [
-        { inc: ['total', 'refrigerant'], exc: [...bad, 'gwp'] },
-        { inc: ['refrigerant', 'kg'], exc: [...bad, 'gwp'] },
-      ]),
-      refGhgKg: pick(mb, [
-        { inc: ['total', 'ghg'] },
-        { inc: ['total', 'co2'] },
-        { inc: ['co2e'] },
-        { inc: ['total', 'emission'] },
-      ]),
-      elec: pick(mc, [
-        { inc: ['total', 'purchase', 'electricity'], exc: ['solar', ...bad] },
-        { inc: ['purchase', 'kwh'], exc: ['solar', ...bad] },
-        { inc: ['totalpurchase'], exc: ['solar', ...bad] },
-        { inc: ['purchase', 'elec'], exc: ['solar', ...bad] },
-      ]),
-      pcs: pick(md, [
-        { inc: ['total', 'shipment', 'pcs'] },
-        { inc: ['shipment', 'pcs'] },
-        { inc: ['shipment', 'qty', 'pcs'] },
-      ]),
-      kg: pick(md, [
-        { inc: ['total', 'shipment', 'kg'] },
-        { inc: ['shipment', 'kg'] },
-        { inc: ['shipment', 'qty', 'kg'] },
-      ]),
+      elec: electricity,
+      pcs: sumNumeric(productionRow.shipPcs) || pick(productionFlat, [{ inc: ['shipment', 'pcs'] }, { inc: ['shipment', 'qty', 'pcs'] }]),
+      kg: sumNumeric(productionRow.shipKg) || pick(productionFlat, [{ inc: ['shipment', 'kg'] }, { inc: ['shipment', 'qty', 'kg'] }]),
+      scope3WasteKg: wasteKg,
+      scope3WastewaterM3: waterDischarge,
+      scope3ChemicalQty: sumMatchingFields(
+        chemicalRow,
+        ['consumption', 'usage', 'quantity', 'qty', 'kg', 'liter', 'litre'],
+        ['cost', 'price', 'stock', 'inventory', 'factor', 'gwp']
+      ),
+      scope3CommutingKm: sumMatchingFields(commutingRow, ['commutingkm', 'distancekm', 'passengerkm', 'km'], ['cost', 'fuel']),
+      scope3LogisticsTkm: sumMatchingFields(commutingRow, ['tonnekilometer', 'tonnekm', 'tonkm', 'tkm'], ['cost']),
     };
   });
 };
@@ -326,6 +414,11 @@ const calcRow = (
     vCng: r.vCng, ghgVCng, vDsl: r.vDsl, ghgVDsl, vPet: r.vPet, ghgVPet, vTot,
     elec: r.elec, ghgElec, s1, s2, s12, ship,
     kpi: ship > 0 ? s12 / ship : 0,
+    scope3WasteKg: r.scope3WasteKg,
+    scope3WastewaterM3: r.scope3WastewaterM3,
+    scope3ChemicalQty: r.scope3ChemicalQty,
+    scope3CommutingKm: r.scope3CommutingKm,
+    scope3LogisticsTkm: r.scope3LogisticsTkm,
   };
 };
 
@@ -334,6 +427,7 @@ const sumCalc = (rows: Calc[]): Calc => {
     ng: 0, ghgNg: 0, dsl: 0, ghgDsl: 0, ref: 0, ghgRef: 0, vCng: 0, ghgVCng: 0, vDsl: 0,
     ghgVDsl: 0, vPet: 0, ghgVPet: 0, vTot: 0, elec: 0, ghgElec: 0, s1: 0, s2: 0, s12: 0,
     ship: 0, kpi: 0,
+    scope3WasteKg: 0, scope3WastewaterM3: 0, scope3ChemicalQty: 0, scope3CommutingKm: 0, scope3LogisticsTkm: 0,
   };
   rows.forEach((r) => NUM_KEYS.forEach((key) => { t[key] += r[key]; }));
   t.kpi = t.ship > 0 ? t.s12 / t.ship : 0;
@@ -358,31 +452,41 @@ interface HeaderModel {
 
 const buildHeader = (cols: Col[]): HeaderModel => {
   const g = (grp: Grp) => cols.filter((c) => c.grp === grp);
-  const s1c = g('s1'), vc = g('veh'), s2c = g('s2'), tc = g('tot'), kc = g('kpi');
+  const s1c = g('s1'), vc = g('veh'), s2c = g('s2'), s3c = g('s3'), tc = g('tot'), kc = g('kpi');
   const sections: HeaderModel['sections'] = [];
   if (s1c.length + vc.length > 0)
     sections.push({ label: 'GHG SCOPE 1 (DIRECT EMISSIONS)', grp: 's1', span: s1c.length + vc.length });
   if (s2c.length) sections.push({ label: 'GHG SCOPE 2 (INDIRECT EMISSIONS)', grp: 's2', span: s2c.length });
+  if (s3c.length) sections.push({ label: 'SCOPE 3 (OTHER INDIRECT ACTIVITY DATA)', grp: 's3', span: s3c.length });
   if (tc.length) sections.push({ label: 'TOTAL SCOPE 1 & 2 GHG', grp: 'tot', span: tc.length });
   if (kc.length) sections.push({ label: 'GHG KPI (INTENSITY)', grp: 'kpi', span: kc.length });
   const row2: HeaderModel['row2'] = [];
   s1c.forEach((col) => row2.push({ kind: 'col', col }));
   if (vc.length) row2.push({ kind: 'veh', span: vc.length });
-  [...s2c, ...tc, ...kc].forEach((col) => row2.push({ kind: 'col', col }));
+  [...s2c, ...s3c, ...tc, ...kc].forEach((col) => row2.push({ kind: 'col', col }));
   return { hasVeh: vc.length > 0, depth: vc.length > 0 ? 3 : 2, sections, row2, row3: vc };
 };
 
 /* ============================== Component ================================ */
-const GhgEmissionSummaryForm: React.FC<GhgEmissionSummaryFormProps> = ({ selectedUnit, selectedYear }) => {
+const GhgEmissionSummaryForm: React.FC<GhgEmissionSummaryFormProps> = ({
+  selectedUnit,
+  selectedYear,
+  userRole,
+  restGet,
+  restSet,
+}) => {
+  const isViewer = userRole === 'viewer';
   const [ghgUnit, setGhgUnit] = useState<GhgUnit>('kg CO₂e');
   const [shipUnit, setShipUnit] = useState<ShipUnit>('pcs');
   const [includeVehicles, setIncludeVehicles] = useState<boolean>(true);
   const [filters, setFilters] = useState<ExportFilters>({
-    s1: true, veh: true, s2: true, tot: true, kpi: true, remarks: true,
+    s1: true, veh: true, s2: true, s3: true, tot: true, kpi: true, remarks: true,
   });
   const [factors, setFactors] = useState<Factors>(DEFAULT_FACTORS);
   const [raws, setRaws] = useState<Raw[]>(() => MONTHS.map(() => ({ ...EMPTY_RAW })));
   const [remarks, setRemarks] = useState<string[]>(() => MONTHS.map(() => ''));
+  const [remarksLoadedKey, setRemarksLoadedKey] = useState('');
+  const [inventorySyncMessage, setInventorySyncMessage] = useState('');
   const [logo, setLogo] = useState<string>(
     typeof window !== 'undefined' ? window.location.origin + '/epyllion-logo.png' : '/epyllion-logo.png'
   );
@@ -421,24 +525,46 @@ const GhgEmissionSummaryForm: React.FC<GhgEmissionSummaryFormProps> = ({ selecte
   }, []);
 
   /* ---- Live cross-module sync ---- */
-  const sync = useCallback(() => {
-    try {
-      setFactors(loadFactors(selectedYear));
-      setRaws(buildRaws(selectedUnit, selectedYear));
-    } catch {
-      setFactors({ ...DEFAULT_FACTORS });
-      setRaws(MONTHS.map(() => ({ ...EMPTY_RAW })));
+  const sync = useCallback(async (loadCloud = false) => {
+    setFactors(loadFactors(selectedYear));
+    const remote: Record<string, any> = {};
+    const failures: string[] = [];
+    if (loadCloud && restGet) {
+      const modules = [
+        'ng_diesel_veh', 'boiler_gen_comp', 'refrigerant_ods', 'elec_solar', 'prod_ops',
+        'waste_mgmt', 'water_withdrawal', 'wastewater_etp', 'chemical_zdhc', 'commuting_logistics',
+      ];
+      await Promise.all(modules.map(async (moduleId) => {
+        try {
+          remote[moduleId] = await restGet(`inventory_data/${selectedUnit}_${selectedYear}_${moduleId}`);
+        } catch (e) {
+          failures.push(e instanceof Error ? e.message : String(e));
+        }
+      }));
     }
-  }, [selectedUnit, selectedYear]);
+    setRaws(buildRaws(selectedUnit, selectedYear, remote));
+    if (failures.some((message) => /403|permission.?denied|unauthori[sz]ed/i.test(message))) {
+      setInventorySyncMessage('Permission denied by Admin. Showing available local data.');
+    } else if (failures.some((message) => /network|fetch failed|load failed/i.test(message)) || (failures.length > 0 && !navigator.onLine)) {
+      setInventorySyncMessage('Network offline - showing locally saved inventory data.');
+    } else if (failures.length > 0) {
+      setInventorySyncMessage('Some cloud inventory records could not be loaded. Showing available local data.');
+    } else {
+      setInventorySyncMessage(loadCloud ? 'Inventory data synced.' : '');
+    }
+  }, [selectedUnit, selectedYear, restGet]);
 
   useEffect(() => {
-    sync();
-    const handler = () => sync();
-    window.addEventListener('storage', handler);
-    window.addEventListener('focus', handler);
+    void sync(true);
+    const localHandler = () => { void sync(false); };
+    const focusHandler = () => { void sync(true); };
+    window.addEventListener('storage', localHandler);
+    window.addEventListener('inventory-data-changed', localHandler);
+    window.addEventListener('focus', focusHandler);
     return () => {
-      window.removeEventListener('storage', handler);
-      window.removeEventListener('focus', handler);
+      window.removeEventListener('storage', localHandler);
+      window.removeEventListener('inventory-data-changed', localHandler);
+      window.removeEventListener('focus', focusHandler);
     };
   }, [sync]);
 
@@ -453,9 +579,21 @@ const GhgEmissionSummaryForm: React.FC<GhgEmissionSummaryFormProps> = ({ selecte
     } catch {
       setRemarks(MONTHS.map(() => ''));
     }
+    setRemarksLoadedKey(remarksKey);
   }, [remarksKey]);
+  const { status: saveStatus, error: saveError, saveNow } = useHybridAutoSave({
+    unit: selectedUnit,
+    year: selectedYear,
+    moduleId: 'ghg_summary',
+    storageKey: remarksKey,
+    payload: remarks,
+    restSet,
+    enabled: !isViewer,
+    ready: remarksLoadedKey === remarksKey,
+  });
 
   const updateRemark = (i: number, v: string) => {
+    if (isViewer) return;
     setRemarks((prev) => {
       const next = [...prev];
       next[i] = v;
@@ -479,7 +617,8 @@ const GhgEmissionSummaryForm: React.FC<GhgEmissionSummaryFormProps> = ({ selecte
     COLS.filter(
       (c) =>
         (c.grp === 's1' && f.s1) || (c.grp === 'veh' && f.veh) ||
-        (c.grp === 's2' && f.s2) || (c.grp === 'tot' && f.tot) || (c.grp === 'kpi' && f.kpi)
+        (c.grp === 's2' && f.s2) || (c.grp === 's3' && f.s3) ||
+        (c.grp === 'tot' && f.tot) || (c.grp === 'kpi' && f.kpi)
     );
 
   const vehBadgeText = includeVehicles ? '✓ Included' : '✗ Excluded';
@@ -719,6 +858,15 @@ const GhgEmissionSummaryForm: React.FC<GhgEmissionSummaryFormProps> = ({ selecte
             </p>
           </div>
           <div className="flex gap-2">
+            {!isViewer && (
+              <button
+                type="button"
+                onClick={() => { void saveNow(); }}
+                className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50"
+              >
+                Save Notes
+              </button>
+            )}
             <button
               type="button"
               onClick={handleDownloadExcel}
@@ -735,6 +883,8 @@ const GhgEmissionSummaryForm: React.FC<GhgEmissionSummaryFormProps> = ({ selecte
             </button>
           </div>
         </div>
+        <InventorySaveStatus status={saveStatus} error={saveError} />
+        {inventorySyncMessage && <p className="mt-2 text-[11px] text-amber-800">{inventorySyncMessage}</p>}
       </div>
 
       {/* ------------------------- Control bar -------------------------- */}
@@ -779,6 +929,7 @@ const GhgEmissionSummaryForm: React.FC<GhgEmissionSummaryFormProps> = ({ selecte
           <FilterBox id="s1" label="Scope 1 (NG, Diesel & Refrigerant)" />
           <FilterBox id="veh" label="Vehicles Fuel Sub-Section (Scope 1)" />
           <FilterBox id="s2" label="Scope 2 (Purchase Electricity)" />
+          <FilterBox id="s3" label="Scope 3 Activity Data" />
           <FilterBox id="tot" label="Total Scope 1 & 2 Summary" />
           <FilterBox id="kpi" label="GHG KPI (Intensity)" />
           <FilterBox id="remarks" label="Remarks" />
@@ -793,6 +944,9 @@ const GhgEmissionSummaryForm: React.FC<GhgEmissionSummaryFormProps> = ({ selecte
           <span className="rounded bg-emerald-50 px-2 py-0.5">Grid {factors.gridElecKgCo2PerKwh} kg/kWh</span>
           <span className="rounded bg-slate-100 px-2 py-0.5">Refrigerant GHG: synced from Refrigerant module</span>
         </div>
+        <p className="border-t border-slate-100 pt-2 text-[11px] text-violet-800">
+          Scope 3 activity is synced from waste, wastewater, chemical, commuting, and logistics records. Scope 3 CO₂e is not calculated until verified emission factors are configured.
+        </p>
       </div>
 
       {/* ---------------------------- Table ---------------------------- */}
@@ -890,6 +1044,7 @@ const GhgEmissionSummaryForm: React.FC<GhgEmissionSummaryFormProps> = ({ selecte
                   <input
                     type="text"
                     value={remarks[i] || ''}
+                    disabled={isViewer}
                     onChange={(e) => updateRemark(i, e.target.value)}
                     placeholder="Add note…"
                     className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800 focus:border-teal-500 focus:outline-none"

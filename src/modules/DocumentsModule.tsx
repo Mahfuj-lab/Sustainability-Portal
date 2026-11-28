@@ -119,13 +119,13 @@ const DocumentsModule: React.FC<DocumentsModuleProps> = ({
           {/* Actions */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <button 
-              disabled={isViewer}
+              hidden={isViewer}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
             >
               <Plus size={14} /> Create Folder
             </button>
             <button 
-              disabled={isViewer}
+              hidden={isViewer}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm disabled:opacity-50"
             >
               <UploadCloud size={14} /> Upload Document

@@ -1,5 +1,12 @@
 // src/modules/WaterWithdrawalForm.tsx
 import React, { useEffect, useMemo, useState } from 'react';
+import type { InventoryRestGet, InventoryRestSet } from '../utils/inventoryDataEntry';
+import {
+  InventorySaveStatus,
+  normalizeNumericInput,
+  useHybridAutoSave,
+  useInventoryGrid,
+} from '../utils/inventoryDataEntry';
 
 /* =========================================================================
    TYPES
@@ -102,6 +109,9 @@ export interface WaterWithdrawalFormProps {
   selectedUnit?: string;
   selectedYear?: number | string;
   companyName?: string;
+  userRole?: string;
+  restGet?: InventoryRestGet;
+  restSet?: InventoryRestSet;
 }
 
 /* =========================================================================
@@ -122,8 +132,6 @@ const MONTHS = [
   'December',
 ];
 const SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-const NUM_RE = /^\d*\.?\d{0,2}$/;
 
 const GROUP_KEYS: GroupKey[] = ['municipal', 'ground', 'total', 'reuse', 'rain', 'discharge'];
 
@@ -809,7 +817,11 @@ export const WaterWithdrawalForm = ({
   selectedUnit,
   selectedYear,
   companyName,
+  userRole,
+  restGet,
+  restSet,
 }: WaterWithdrawalFormProps) => {
+  const isViewer = userRole === 'viewer';
   const unit = selectedUnit === undefined || selectedUnit === '' ? 'Default Unit' : String(selectedUnit);
   const year =
     selectedYear === undefined || selectedYear === '' ? String(new Date().getFullYear()) : String(selectedYear);
@@ -818,6 +830,18 @@ export const WaterWithdrawalForm = ({
 
   const [data, setData] = useState<FormData>(() => loadData(storageKey));
   const [loadedKey, setLoadedKey] = useState<string>(storageKey);
+  const { gridHandlers, gridError, reportGridError } = useInventoryGrid();
+  const { status, error, saveNow } = useHybridAutoSave({
+    unit,
+    year,
+    moduleId: 'water_withdrawal',
+    storageKey,
+    payload: data,
+    restGet,
+    restSet,
+    enabled: !isViewer,
+    ready: loadedKey === storageKey,
+  });
   const [selected, setSelected] = useState<Record<GroupKey, boolean>>({
     municipal: true,
     ground: true,
@@ -860,17 +884,24 @@ export const WaterWithdrawalForm = ({
 
   /* ----- Mutations ----- */
   const updateMonth = (mi: number, fn: (m: MonthEntry) => MonthEntry): void => {
+    if (isViewer) return;
     setData((d) => ({ ...d, months: d.months.map((m, i) => (i === mi ? fn(m) : m)) }));
   };
 
   const onCell = (mi: number, col: Col, v: string): void => {
+    if (isViewer) return;
     if (!col.set) return;
-    if (!NUM_RE.test(v)) return;
+    const normalized = normalizeNumericInput(v);
+    if (normalized === null) {
+      reportGridError(v.trim().startsWith('-') ? 'Negative value not allowed' : 'Invalid text pasted in numeric cell');
+      return;
+    }
     const setter = col.set;
-    updateMonth(mi, (m) => setter(m, v));
+    updateMonth(mi, (m) => setter(m, normalized));
   };
 
   const onCellBlur = (mi: number, col: Col): void => {
+    if (isViewer) return;
     if (!col.set || !col.raw) return;
     const setter = col.set;
     const current = col.raw(data.months[mi]);
@@ -883,6 +914,7 @@ export const WaterWithdrawalForm = ({
   };
 
   const renameMeter = (key: MeterKey, idx: number, name: string): void => {
+    if (isViewer) return;
     setData((d) => ({
       ...d,
       names: { ...d.names, [key]: d.names[key].map((n, i) => (i === idx ? name : n)) } as MeterNames,
@@ -890,6 +922,7 @@ export const WaterWithdrawalForm = ({
   };
 
   const addMeter = (key: MeterKey): void => {
+    if (isViewer) return;
     setData((d) => {
       if (d.names[key].length >= 30) return d;
       const n = d.names[key].length + 1;
@@ -902,6 +935,7 @@ export const WaterWithdrawalForm = ({
   };
 
   const removeMeter = (key: MeterKey, idx: number): void => {
+    if (isViewer) return;
     if (data.names[key].length <= 1) return;
     const has = data.months.some((m) => (m[key][idx] === undefined ? '' : m[key][idx]) !== '');
     if (has && typeof window !== 'undefined') {
@@ -1039,7 +1073,7 @@ export const WaterWithdrawalForm = ({
      RENDER
      ======================================================================= */
   return (
-    <div className="wwf-root">
+    <div {...gridHandlers} className="wwf-root">
       <style>{CSS}</style>
 
       {/* ---------- Header / actions ---------- */}
@@ -1052,6 +1086,11 @@ export const WaterWithdrawalForm = ({
             </div>
           </div>
           <div className="wwf-bar">
+            {!isViewer && (
+              <button type="button" className="wwf-btn" onClick={() => { void saveNow(); }}>
+                Save Data
+              </button>
+            )}
             <button type="button" className="wwf-btn" onClick={downloadExcel}>
               Download Excel (.xls)
             </button>
@@ -1060,6 +1099,7 @@ export const WaterWithdrawalForm = ({
             </button>
           </div>
         </div>
+        <InventorySaveStatus status={status} error={error} gridError={gridError} />
         <div className="wwf-bar" style={{ marginTop: 10 }}>
           <span style={{ fontSize: 12, fontWeight: 700 }}>Include in Excel / PDF:</span>
           {GROUP_KEYS.map((k) => (
@@ -1092,7 +1132,7 @@ export const WaterWithdrawalForm = ({
                     style={{ background: t.head, color: t.text, borderBottom: `2px solid ${t.border}` }}
                   >
                     {g.title}
-                    {g.addKey && (
+                    {g.addKey && !isViewer && (
                       <button
                         type="button"
                         className="wwf-add"
@@ -1121,11 +1161,12 @@ export const WaterWithdrawalForm = ({
                               className="wwf-name"
                               value={c.label}
                               aria-label="Meter name"
+                              disabled={isViewer}
                               onChange={(e) =>
                                 c.meter && renameMeter(c.meter.key, c.meter.idx, e.target.value)
                               }
                             />
-                            {data.names[c.meter.key].length > 1 && (
+                            {!isViewer && data.names[c.meter.key].length > 1 && (
                               <button
                                 type="button"
                                 className="wwf-x"
@@ -1176,6 +1217,7 @@ export const WaterWithdrawalForm = ({
                               placeholder="0.00"
                               value={c.raw ? c.raw(m) : ''}
                               aria-label={`${MONTHS[mi]} ${c.label}`}
+                              disabled={isViewer}
                               onChange={(e) => onCell(mi, c, e.target.value)}
                               onBlur={() => onCellBlur(mi, c)}
                             />
@@ -1190,6 +1232,7 @@ export const WaterWithdrawalForm = ({
                     className="wwf-rem"
                     value={m.remarks}
                     aria-label={`${MONTHS[mi]} remarks`}
+                    disabled={isViewer}
                     onChange={(e) => {
                       const v = e.target.value;
                       updateMonth(mi, (x) => ({ ...x, remarks: v }));

@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Plus, X, Printer, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import { UNIT_DIRECTORY } from '../utils/unitDirectory';
+import {
+  InventorySaveStatus,
+  normalizeNumericInput,
+  useHybridAutoSave,
+  useInventoryGrid,
+} from '../utils/inventoryDataEntry';
 
 export interface PurchaseElectricitySolarFormProps {
   selectedUnit: string;
@@ -215,11 +221,6 @@ const getUnitInfo = (code: string) => {
   return fallback;
 };
 
-const isValidNumber = (val: string): boolean => {
-  if (val === '') return true;
-  return /^\d*(\.\d{0,2})?$/.test(val);
-};
-
 /* ------------------------------------------------------------------ */
 /*  Export / print HTML helpers (markup identical to previous version) */
 /* ------------------------------------------------------------------ */
@@ -239,6 +240,8 @@ export default function PurchaseElectricitySolarForm({
   selectedUnit,
   selectedYear,
   userRole,
+  restGet,
+  restSet,
 }: PurchaseElectricitySolarFormProps) {
   const isViewer = userRole === 'viewer';
   const safeUnit = selectedUnit || 'UNKNOWN';
@@ -263,6 +266,19 @@ export default function PurchaseElectricitySolarForm({
 
   const [data, setData] = useState<FormData>({});
   const [isSaved, setIsSaved] = useState(false);
+  const [loadedKey, setLoadedKey] = useState('');
+  const { gridHandlers, gridError, reportGridError } = useInventoryGrid();
+  const { status, error, saveNow } = useHybridAutoSave({
+    unit: safeUnit,
+    year: safeYear,
+    moduleId: 'elec_solar',
+    storageKey,
+    payload: { meters, solarMeters, generators, data },
+    restGet,
+    restSet,
+    enabled: !isViewer,
+    ready: loadedKey === storageKey,
+  });
 
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({
     meters: true,
@@ -323,22 +339,28 @@ export default function PurchaseElectricitySolarForm({
       MONTHS.forEach(m => { initialData[m] = getEmptyMonth(); });
       setData(initialData);
     }
+    setLoadedKey(storageKey);
   }, [storageKey]);
 
   const handleSave = () => {
     if (isViewer) return;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify({ meters, solarMeters, generators, data }));
+    void saveNow().then((saved) => {
+      if (!saved) return;
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
-    } catch (e) {
-      alert('Failed to save data to local storage.');
-    }
+    });
   };
 
   const updateMonthField = (month: string, field: keyof MonthData, value: string) => {
     if (isViewer) return;
-    if (['totalTK', 'purchaseDomestic', 'purchaseProduction'].includes(field) && !isValidNumber(value)) return;
+    if (['totalTK', 'purchaseDomestic', 'purchaseProduction'].includes(field)) {
+      const normalized = normalizeNumericInput(value);
+      if (normalized === null) {
+        reportGridError(value.trim().startsWith('-') ? 'Negative value not allowed' : 'Invalid text pasted in numeric cell');
+        return;
+      }
+      value = normalized;
+    }
     setData(prev => ({
       ...prev,
       [month]: {
@@ -350,7 +372,12 @@ export default function PurchaseElectricitySolarForm({
 
   const updateNestedQty = (month: string, section: 'offPeak' | 'peak' | 'flat' | 'solar' | 'generators', id: string, value: string) => {
     if (isViewer) return;
-    if (!isValidNumber(value)) return;
+    const normalized = normalizeNumericInput(value);
+    if (normalized === null) {
+      reportGridError(value.trim().startsWith('-') ? 'Negative value not allowed' : 'Invalid text pasted in numeric cell');
+      return;
+    }
+    value = normalized;
 
     setData(prev => {
       const prevMonth = prev[month] || getEmptyMonth();
@@ -741,7 +768,7 @@ export default function PurchaseElectricitySolarForm({
   };
 
   return (
-    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm border border-slate-200">
+    <div {...gridHandlers} className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm border border-slate-200">
       {/* Header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
         <div>
@@ -768,6 +795,7 @@ export default function PurchaseElectricitySolarForm({
               <CheckCircle2 size={16} /> Saved
             </span>
           )}
+          <InventorySaveStatus status={status} error={error} gridError={gridError} />
 
           <button
             onClick={handleExport}

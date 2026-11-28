@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Plus, X, Printer, CheckCircle2, AlertCircle, FileSpreadsheet, Lock } from 'lucide-react';
 import { UNIT_DIRECTORY } from '../utils/unitDirectory';
+import {
+  InventorySaveStatus,
+  normalizeNumericInput,
+  useHybridAutoSave,
+  useInventoryGrid,
+} from '../utils/inventoryDataEntry';
 
 export interface NaturalGasDieselVehiclesFormProps {
   selectedUnit: string;
@@ -189,11 +195,6 @@ const getUnitInfo = (code: string) => {
   return fallback;
 };
 
-const isValidNumber = (val: string): boolean => {
-  if (val === '') return true;
-  return /^\d*(\.\d{0,2})?$/.test(val);
-};
-
 /* ------------------------------------------------------------------ */
 /* Small presentational helpers                                        */
 /* ------------------------------------------------------------------ */
@@ -285,6 +286,8 @@ export default function NaturalGasDieselVehiclesForm({
   selectedUnit,
   selectedYear,
   userRole,
+  restGet,
+  restSet,
 }: NaturalGasDieselVehiclesFormProps) {
   const isViewer = userRole === 'viewer';
   const safeUnit = selectedUnit || 'UNKNOWN';
@@ -311,6 +314,19 @@ export default function NaturalGasDieselVehiclesForm({
   const [data, setData] = useState<FormData>({});
   const [elecRatio, setElecRatio] = useState<Record<string, { dom: number; prod: number }>>({});
   const [isSaved, setIsSaved] = useState(false);
+  const [loadedKey, setLoadedKey] = useState('');
+  const { gridHandlers, gridError, reportGridError } = useInventoryGrid();
+  const { status, error, saveNow } = useHybridAutoSave({
+    unit: safeUnit,
+    year: safeYear,
+    moduleId: 'ng_diesel_veh',
+    storageKey,
+    payload: { ngMeters, generators, boilers, data },
+    restGet,
+    restSet,
+    enabled: !isViewer,
+    ready: loadedKey === storageKey,
+  });
   
   const [energyFactors, setEnergyFactors] = useState({ 
     ngMjPerM3: 38.30, 
@@ -428,22 +444,28 @@ export default function NaturalGasDieselVehiclesForm({
     } catch (e) {
       console.error('Failed to load electricity ratio', e);
     }
+    setLoadedKey(storageKey);
   }, [storageKey, elecSolarKey, safeYear]);
 
   const handleSave = () => {
     if (isViewer) return;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify({ ngMeters, generators, boilers, data }));
+    void saveNow().then((saved) => {
+      if (!saved) return;
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
-    } catch (e) {
-      alert('Failed to save data.');
-    }
+    });
   };
 
   const updateMonthField = (month: string, field: keyof MonthData, value: string) => {
     if (isViewer) return;
-    if (typeof value === 'string' && !isValidNumber(value) && field !== 'remarks') return;
+    if (field !== 'remarks') {
+      const normalized = normalizeNumericInput(value);
+      if (normalized === null) {
+        reportGridError(value.trim().startsWith('-') ? 'Negative value not allowed' : 'Invalid text pasted in numeric cell');
+        return;
+      }
+      value = normalized;
+    }
     setData(prev => ({
       ...prev,
       [month]: {
@@ -455,7 +477,12 @@ export default function NaturalGasDieselVehiclesForm({
 
   const updateNestedQty = (month: string, section: 'ngValues' | 'genDieselValues' | 'boilerDieselValues', id: string, value: string) => {
     if (isViewer) return;
-    if (!isValidNumber(value)) return;
+    const normalized = normalizeNumericInput(value);
+    if (normalized === null) {
+      reportGridError(value.trim().startsWith('-') ? 'Negative value not allowed' : 'Invalid text pasted in numeric cell');
+      return;
+    }
+    value = normalized;
 
     setData(prev => {
       const prevMonth = prev[month] || getEmptyMonth();
@@ -854,7 +881,7 @@ export default function NaturalGasDieselVehiclesForm({
   const checkboxClass = 'flex items-center gap-1.5 cursor-pointer px-2.5 py-1 rounded-md border bg-white hover:bg-slate-50 transition text-xs font-medium text-slate-700';
 
   return (
-    <div className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-md border border-slate-200">
+    <div {...gridHandlers} className="w-full max-w-[95vw] mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-md border border-slate-200">
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Natural Gas, Diesel &amp; Vehicles</h1>
@@ -892,6 +919,7 @@ export default function NaturalGasDieselVehiclesForm({
               <CheckCircle2 size={16} /> Saved
             </span>
           )}
+          <InventorySaveStatus status={status} error={error} gridError={gridError} />
 
           <button
             onClick={handleExport}
