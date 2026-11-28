@@ -345,7 +345,9 @@ const buildRaws = (unit: string, year: number | string, remote: Record<string, a
     const refGhgKg = Object.entries(refrigerantValues).reduce((sum, [name, value]) =>
       sum + amount(value) * (refrigerantGwp[norm(name)] || 0), 0);
 
-    const electricity = sumNamedFields(electricityRow, ['offPeak', 'peak', 'flat']) ||
+    const splitElectricity = sumNamedFields(electricityRow, ['offPeak', 'peak']);
+    // Flat Rate duplicates those readings; use it only for legacy flat-only records.
+    const electricity = splitElectricity || sumNumeric(electricityRow?.flat) ||
       pick(flatten(electricityRow), [
         { inc: ['purchase', 'electricity', 'kwh'], exc: ['solar', ...bad] },
         { inc: ['grid', 'kwh'], exc: ['solar', ...bad] },

@@ -159,14 +159,16 @@ interface NameInputProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   theme: Theme;
+  placeholder?: string;
 }
 
-const NameInput: React.FC<NameInputProps> = ({ value, onChange, disabled, theme }) => (
+const NameInput: React.FC<NameInputProps> = ({ value, onChange, disabled, theme, placeholder }) => (
   <input
     type="text"
     value={value}
     onChange={(e) => onChange(e.target.value)}
     disabled={disabled}
+    placeholder={placeholder}
     className={`w-full min-w-[80px] border border-slate-300 bg-white rounded px-2 py-1 text-center text-xs font-semibold text-slate-800 outline-none transition disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed ${theme.focus}`}
   />
 );
@@ -294,9 +296,11 @@ export default function PurchaseElectricitySolarForm({
       const stored = localStorage.getItem(storageKey);
       if (stored) {
         const parsed = JSON.parse(stored);
+        const loadedMeters = parsed && Array.isArray(parsed.meters) && parsed.meters.length > 0
+          ? parsed.meters as Meter[]
+          : [{ id: 'm1', name: 'Meter 1' }, { id: 'm2', name: 'Meter 2' }];
 
-        if (parsed && Array.isArray(parsed.meters) && parsed.meters.length > 0) setMeters(parsed.meters);
-        else setMeters([{ id: 'm1', name: 'Meter 1' }, { id: 'm2', name: 'Meter 2' }]);
+        setMeters(loadedMeters);
 
         if (parsed && Array.isArray(parsed.solarMeters) && parsed.solarMeters.length > 0) setSolarMeters(parsed.solarMeters);
         else setSolarMeters([{ id: 's1', name: 'Solar Meter 1' }, { id: 's2', name: 'Solar Meter 2' }]);
@@ -308,11 +312,21 @@ export default function PurchaseElectricitySolarForm({
           const validatedData: FormData = {};
           MONTHS.forEach(m => {
             const rawMonth = parsed.data[m];
+            const offPeak = rawMonth?.offPeak || {};
+            const peak = rawMonth?.peak || {};
+            const flat = { ...rawMonth?.flat };
+            loadedMeters.forEach(meter => {
+              const offPeakValue = offPeak[meter.id] || '';
+              const peakValue = peak[meter.id] || '';
+              flat[meter.id] = offPeakValue || peakValue
+                ? (n(offPeakValue) + n(peakValue)).toFixed(2)
+                : '';
+            });
             validatedData[m] = rawMonth && typeof rawMonth === 'object'
               ? {
-                  offPeak: rawMonth.offPeak || {},
-                  peak: rawMonth.peak || {},
-                  flat: rawMonth.flat || {},
+                  offPeak,
+                  peak,
+                  flat,
                   totalTK: rawMonth.totalTK || '',
                   purchaseDomestic: rawMonth.purchaseDomestic || '',
                   purchaseProduction: rawMonth.purchaseProduction || '',
@@ -381,15 +395,24 @@ export default function PurchaseElectricitySolarForm({
 
     setData(prev => {
       const prevMonth = prev[month] || getEmptyMonth();
+      const nextMonth: MonthData = {
+        ...prevMonth,
+        [section]: {
+          ...prevMonth[section],
+          [id]: value,
+        },
+      };
+      if (section === 'offPeak' || section === 'peak') {
+        const offPeak = section === 'offPeak' ? value : prevMonth.offPeak?.[id] || '';
+        const peak = section === 'peak' ? value : prevMonth.peak?.[id] || '';
+        nextMonth.flat = {
+          ...prevMonth.flat,
+          [id]: offPeak || peak ? (n(offPeak) + n(peak)).toFixed(2) : '',
+        };
+      }
       return {
         ...prev,
-        [month]: {
-          ...prevMonth,
-          [section]: {
-            ...(prevMonth[section] || {}),
-            [id]: value,
-          },
-        },
+        [month]: nextMonth,
       };
     });
   };
@@ -414,9 +437,14 @@ export default function PurchaseElectricitySolarForm({
     setter(prev => prev.filter(m => m.id !== id));
   };
 
-  const getPurchaseTotal = (row: MonthData) => {
-    return meters.reduce((sum, m) => sum + n(row.offPeak?.[m.id]) + n(row.peak?.[m.id]) + n(row.flat?.[m.id]), 0);
+  const getMeterFlatRate = (row: MonthData, meterId: string) => {
+    const offPeak = row.offPeak?.[meterId] || '';
+    const peak = row.peak?.[meterId] || '';
+    return offPeak || peak ? (n(offPeak) + n(peak)).toFixed(2) : '';
   };
+
+  const getPurchaseTotal = (row: MonthData) =>
+    meters.reduce((sum, meter) => sum + n(getMeterFlatRate(row, meter.id)), 0);
 
   const getSolarTotal = (row: MonthData) => {
     return solarMeters.reduce((sum, m) => sum + n(row.solar?.[m.id]), 0);
@@ -464,7 +492,10 @@ export default function PurchaseElectricitySolarForm({
   };
 
   const getMeterYearlyTotal = (meterId: string, subCol: 'offPeak' | 'peak' | 'flat') => {
-    return MONTHS.reduce((sum, m) => sum + n(data[m]?.[subCol]?.[meterId]), 0);
+    return MONTHS.reduce((sum, m) => {
+      const row = data[m] || getEmptyMonth();
+      return sum + (subCol === 'flat' ? n(getMeterFlatRate(row, meterId)) : n(row[subCol]?.[meterId]));
+    }, 0);
   };
 
   const getSolarMeterYearlyTotal = (meterId: string) => {
@@ -569,7 +600,7 @@ export default function PurchaseElectricitySolarForm({
         meters.forEach(meter => {
           tbody += tdR(row.offPeak?.[meter.id] || '');
           tbody += tdR(row.peak?.[meter.id] || '');
-          tbody += tdR(row.flat?.[meter.id] || '');
+          tbody += tdR(getMeterFlatRate(row, meter.id));
         });
       }
 
@@ -906,16 +937,20 @@ export default function PurchaseElectricitySolarForm({
             <tr>
               {sections.meters && (
                 <>
-                  {meters.map((m) => (
+                  {meters.map((m, meterIndex) => (
                     <th key={m.id} colSpan={3} className={`px-2 py-2 min-w-[150px] border-b border-r ${A.sub} ${A.border}`}>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-col items-center gap-1.5">
+                        <span className="text-[11px] font-semibold text-slate-700">Meter {meterIndex + 1}</span>
+                        <div className="flex w-full items-center gap-1.5">
                         <NameInput
                           value={m.name}
                           onChange={(v) => updateMeterName('meters', m.id, v)}
                           disabled={isViewer}
                           theme={A}
+                          placeholder="Meter Name"
                         />
                         {renderRemoveButton('meters', m.id, meters.length)}
+                        </div>
                       </div>
                     </th>
                   ))}
@@ -1010,7 +1045,7 @@ export default function PurchaseElectricitySolarForm({
                             <CellInput width="w-20" theme={A} disabled={isViewer} value={row.peak?.[m.id] || ''} onChange={(v) => updateNestedQty(month, 'peak', m.id, v)} />
                           </td>
                           <td className={`px-1.5 py-1.5 border-b border-r ${A.tint} ${A.border}`}>
-                            <CellInput width="w-20" theme={A} disabled={isViewer} value={row.flat?.[m.id] || ''} onChange={(v) => updateNestedQty(month, 'flat', m.id, v)} />
+                            <CellInput width="w-20" theme={A} disabled value={getMeterFlatRate(row, m.id)} onChange={() => undefined} />
                           </td>
                         </React.Fragment>
                       ))}

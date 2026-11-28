@@ -421,7 +421,7 @@ export default function ProductionOperationsForm({
         <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Working Days</th>
         <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Available Hour</th>
         <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Produce Hour</th>
-        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Total MTO</th>
+        <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Total NPT</th>
         <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Efficiency (%)</th>
         <th style="border: 1px solid #000; padding: 5px; background-color: #ecfdf5; font-size: 11px;">Avg SMV</th>
       `;
@@ -609,7 +609,7 @@ export default function ProductionOperationsForm({
     { field: 'workingDays', label: 'Working Days' },
     { field: 'availableHour', label: 'Available Hour' },
     { field: 'produceHour', label: 'Produce Hour' },
-    { field: 'totalMTO', label: 'Total MTO' },
+    { field: 'totalMTO', label: 'Total NPT' },
     { field: 'efficiency', label: 'Efficiency (%)' },
     { field: 'averageSMV', label: 'Avg SMV' },
   ];

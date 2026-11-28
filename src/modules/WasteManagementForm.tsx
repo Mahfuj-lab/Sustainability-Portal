@@ -117,7 +117,14 @@ const GROUPS: GroupDef[] = [
     id: 'othernonhaz', section: 'nonhaz', title: 'Other Non-Hazardous Waste (kg)', totalLabel: 'Total Other Non-Haz (kg)',
     hasSub: true, addLabel: '+ Add Non-Haz Item', includeLabel: 'Include Other Non-Haz',
     allLabel: 'All Items', totalOnlyLabel: 'Total Only',
-    defaults: mk('othernonhaz', ['Paper & Carton', 'Food / Organic Waste', 'Metal Scrap', 'Wood / Pallet']),
+    defaults: [
+      { id: 'othernonhaz_1', label: 'Paper & Carton (Legacy)' },
+      { id: 'othernonhaz_carton', label: 'Carton' },
+      { id: 'othernonhaz_paper', label: 'Paper' },
+      { id: 'othernonhaz_2', label: 'Food / Organic Waste' },
+      { id: 'othernonhaz_3', label: 'Metal Scrap' },
+      { id: 'othernonhaz_4', label: 'Wood / Pallet' },
+    ],
   },
   {
     id: 'electronics', section: 'haz', title: 'Electronics Waste (kg)', totalLabel: 'Total Electronics Waste (kg)',
@@ -838,7 +845,7 @@ const WasteManagementForm: React.FC<WasteManagementFormProps> = ({ selectedUnit,
           <div
             aria-readonly="true"
             title="Auto-calculated (locked)"
-            className={`min-w-[84px] cursor-not-allowed select-none rounded-md border border-slate-200 px-2 py-1 text-right text-xs font-semibold ${t.locked}`}
+            className={`min-w-[84px] cursor-not-allowed rounded-md border border-slate-200 px-2 py-1 text-right text-xs font-semibold ${t.locked}`}
           >
             {fmt(monthCalcs[mi][col.calcKey as string])}
           </div>

@@ -828,7 +828,7 @@ const RefrigerantOdsForm: React.FC<RefrigerantOdsFormProps> = ({ selectedUnit, s
                     <td
                       key={col.id}
                       title="Auto-calculated"
-                      className={`${base} cursor-not-allowed select-none text-right font-medium tabular-nums`}
+                      className={`${base} cursor-not-allowed text-right font-medium tabular-nums`}
                     >
                       {cellText(col, mi)}
                     </td>

@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
+  createUserWithEmailAndPassword,
+  deleteUser,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+} from '@firebase/auth';
+import {
   Leaf, LogOut, Users, Settings, BarChart3, Zap, Flame, Factory,
   FileSpreadsheet, Save, X, Check, AlertCircle, Menu, Eye, EyeOff, Shield, Plus,
   ChevronDown, ChevronRight, Box, TrendingUp, Target, Globe, FileCheck, Scale, FolderOpen,
@@ -19,15 +27,18 @@ import McdDataManagement from './modules/McdDataManagement';
 import HumanResource from './modules/HumanResource';
 import DocumentsModule from './modules/DocumentsModule';
 import CustomExcelExport from './modules/CustomExcelExport';
+import {
+  auth,
+  firestoreRequest,
+  logFirestoreWrite,
+  provisioningAuth,
+  setFirestoreAuditContext,
+} from './services/firestoreAuthClient';
 type ThemeKey = string;
 
 // ============================================================
-// FIRESTORE REST API (no SDK, native fetch)
+// FIRESTORE REST API (authenticated through the shared client)
 // ============================================================
-const PROJECT_ID = "sustainability-portal-886cf";
-const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY;
-const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
-
 const toFSValue = (v: any): any => {
   if (v === null || v === undefined) return { nullValue: null };
   if (typeof v === 'string') return { stringValue: v };
@@ -67,7 +78,7 @@ const toFSFields = (obj: any): any => {
 };
 
 const restGet = async (path: string) => {
-  const r = await fetch(`${BASE}/${path}?key=${API_KEY}`);
+  const r = await firestoreRequest(path);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`GET ${path} failed: ${r.status}`);
   const json = await r.json();
@@ -78,9 +89,9 @@ const restList = async (collectionId: string) => {
   const docs: any[] = [];
   let pageToken = '';
   do {
-    const params = new URLSearchParams({ key: API_KEY || '', pageSize: '1000' });
+    const params = new URLSearchParams({ pageSize: '1000' });
     if (pageToken) params.set('pageToken', pageToken);
-    const r = await fetch(`${BASE}/${collectionId}?${params}`);
+    const r = await firestoreRequest(`${collectionId}?${params}`);
     if (!r.ok) {
       if (r.status === 404) return [];
       throw new Error(`LIST ${collectionId} failed: ${r.status}`);
@@ -96,10 +107,10 @@ const restListCollectionIds = async (parentPath = ''): Promise<string[]> => {
   const collectionIds: string[] = [];
   let pageToken = '';
   do {
-    const params = new URLSearchParams({ key: API_KEY || '' });
+    const params = new URLSearchParams();
     if (pageToken) params.set('pageToken', pageToken);
-    const url = `${BASE}${parentPath ? `/${parentPath}` : ''}:listCollectionIds?${params}`;
-    const r = await fetch(url, {
+    const path = `${parentPath ? `/${parentPath}` : ''}:listCollectionIds${params.toString() ? `?${params}` : ''}`;
+    const r = await firestoreRequest(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pageSize: 1000, pageToken: pageToken || undefined }),
@@ -128,39 +139,42 @@ const restExportAllDocuments = async (): Promise<{ collection: string; id: strin
 };
 
 const restSet = async (collectionId: string, docId: string, data: any) => {
-  const r = await fetch(`${BASE}/${collectionId}/${docId}?key=${API_KEY}`, {
+  const r = await firestoreRequest(`${collectionId}/${docId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: toFSFields(data) }),
   });
   if (!r.ok) throw new Error(`SET failed: ${r.status} ${await r.text()}`);
+  await logWriteWithNotification(collectionId, data);
   return true;
-};
-
-const restCreate = async (collectionId: string, data: any) => {
-  const r = await fetch(`${BASE}/${collectionId}?key=${API_KEY}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: toFSFields(data) }),
-  });
-  if (!r.ok) throw new Error(`CREATE failed: ${r.status} ${await r.text()}`);
-  const json = await r.json();
-  return json.name?.split('/').pop();
 };
 
 const restPatch = async (collectionId: string, docId: string, data: any) => {
   const mask = Object.keys(data).map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
-  const r = await fetch(`${BASE}/${collectionId}/${docId}?key=${API_KEY}&${mask}`, {
+  const r = await firestoreRequest(`${collectionId}/${docId}?${mask}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: toFSFields(data) }),
   });
   if (!r.ok) throw new Error(`PATCH failed: ${r.status} ${await r.text()}`);
+  await logWriteWithNotification(collectionId, data);
   return true;
 };
 
+const logWriteWithNotification = async (collectionId: string, data: Record<string, unknown>) => {
+  try {
+    await logFirestoreWrite(collectionId, data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Failed to write Firestore audit log after a successful save.', error);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('portal-audit-error', { detail: message }));
+    }
+  }
+};
+
 const restQuery = async (collectionId: string, filters: { field: string; value: string }[]) => {
-  const r = await fetch(`${BASE}:runQuery?key=${API_KEY}`, {
+  const r = await firestoreRequest(':runQuery', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -200,7 +214,7 @@ type UserStatus = 'pending' | 'approved' | 'rejected';
 interface UserRecord {
   id?: string;
   email: string;
-  password: string;
+  password?: string;
   full_name: string;
   role: Role;
   status: UserStatus;
@@ -209,12 +223,14 @@ interface UserRecord {
 }
 
 const normalizeUser = (raw: any): UserRecord => {
+  const safeRaw = { ...(raw || {}) };
+  delete safeRaw.password;
   const allowedModules = Array.isArray(raw?.allowedModules) ? raw.allowedModules
     : Array.isArray(raw?.allowed_modules) ? raw.allowed_modules : [];
   const allowedUnits = Array.isArray(raw?.allowedUnits) ? raw.allowedUnits
     : Array.isArray(raw?.allowed_factories) ? raw.allowed_factories : [];
   return {
-    ...raw,
+    ...safeRaw,
     role: raw?.role === 'super_admin' ? 'super_admin' : raw?.role === 'editor' || raw?.role === 'entry_user' ? 'editor' : 'viewer',
     status: raw?.role === 'super_admin' || raw?.status === 'active' || raw?.status === 'approved'
       ? 'approved'
@@ -455,7 +471,12 @@ const emptyProdRow = (month: string): ProductionRow => ({
   prod_pcs_stst:0, prod_pcs_ca:0, prod_pcs_ms:0, prod_pcs_varner:0, prod_pcs_next:0, prod_pcs_fenatech:0, prod_pcs_4f:0, total_production_kg:0,
 });
 
-const rowTotalPE = (r: EnergyRow) => n(r.pe_meter1_offpeak)+n(r.pe_meter1_peak)+n(r.pe_meter1_flat)+n(r.pe_meter2_offpeak)+n(r.pe_meter2_peak)+n(r.pe_meter2_flat);
+const rowTotalPE = (r: EnergyRow) => {
+  const meter1Split = n(r.pe_meter1_offpeak) + n(r.pe_meter1_peak);
+  const meter2Split = n(r.pe_meter2_offpeak) + n(r.pe_meter2_peak);
+  // Flat is derived from the split readings; use it only for legacy flat-only records.
+  return (meter1Split || n(r.pe_meter1_flat)) + (meter2Split || n(r.pe_meter2_flat));
+};
 const rowTotalNG = (r: EnergyRow) => n(r.ng_meter1_m3)+n(r.ng_meter2_m3);
 const rowTotalDiesel = (r: EnergyRow) => n(r.diesel_gen1_l)+n(r.diesel_gen2_l)+n(r.diesel_boiler_l);
 const rowTotalProductionPcs = (r: ProductionRow) => n(r.prod_pcs_stst)+n(r.prod_pcs_ca)+n(r.prod_pcs_ms)+n(r.prod_pcs_varner)+n(r.prod_pcs_next)+n(r.prod_pcs_fenatech)+n(r.prod_pcs_4f);
@@ -804,35 +825,76 @@ const App: React.FC = () => {
   const [activeModule, setActiveModule] = useState<string>('dashboard');
   const [expandedModules, setExpandedModules] = useState<string[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => typeof window === 'undefined' ? true : window.innerWidth >= 768);
+  useEffect(() => {
+    setFirestoreAuditContext(user ? { userEmail: user.email, role: user.role, unit: factory } : null);
+  }, [user, factory]);
 
   const [energyRows, setEnergyRows] = useState<EnergyRow[]>([]);
   const [prodRows, setProdRows] = useState<ProductionRow[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
 
   useEffect(() => {
-    const restoreSession = async () => {
-      const sess = localStorage.getItem('sp_session');
-      if (sess) {
-        try {
-          const savedUser = normalizeUser(JSON.parse(sess));
-          if (!savedUser.id) throw new Error('Stored session is missing its user ID.');
-          const latestUser = await restGet(`users/${savedUser.id}`);
-          if (!latestUser) throw new Error('Account no longer exists.');
-          const currentUser = normalizeUser(latestUser);
-          setUser(currentUser);
-          if (currentUser.status === 'approved') localStorage.setItem('sp_session', JSON.stringify(currentUser));
-          else localStorage.removeItem('sp_session');
-        } catch {
-          localStorage.removeItem('sp_session');
-          setBootError('Unable to verify your saved session. Please sign in again.');
-        }
+    let active = true;
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!active) return;
+      if (!firebaseUser) {
+        localStorage.removeItem('sp_session');
+        setUser(null);
+        setBootLoading(false);
+        return;
       }
-      setBootLoading(false);
+
+      setBootLoading(true);
+      try {
+        let latestUser: any = null;
+        for (let attempt = 0; attempt < 5 && !latestUser; attempt++) {
+          latestUser = await restGet(`users/${firebaseUser.uid}`);
+          if (!latestUser && firebaseUser.email) {
+            const matches = await restQuery('users', [
+              { field: 'email', value: firebaseUser.email.trim().toLowerCase() },
+            ]);
+            latestUser = matches.find((match: any) => match.id === firebaseUser.uid) || matches[0] || null;
+          }
+          if (!latestUser && attempt < 4) {
+            await new Promise<void>(resolve => window.setTimeout(resolve, 400));
+          }
+        }
+        if (!latestUser) throw new Error('Account profile no longer exists.');
+
+        const currentUser = normalizeUser(latestUser);
+        currentUser.id = latestUser.id || firebaseUser.uid;
+        if (currentUser.status === 'rejected') {
+          localStorage.removeItem('sp_session');
+          setUser(null);
+          setBootError('Your account has been rejected. Please contact an administrator.');
+          await signOut(auth);
+          return;
+        }
+        setUser(currentUser);
+        setBootError('');
+        localStorage.setItem('sp_session', JSON.stringify(currentUser));
+      } catch (error) {
+        console.error('Unable to restore the authenticated user profile.', error);
+        localStorage.removeItem('sp_session');
+        setUser(null);
+        setBootError('Unable to verify your saved session. Please sign in again.');
+        try {
+          await signOut(auth);
+        } catch (signOutError) {
+          console.error('Could not clear the invalid Firebase Auth session.', signOutError);
+        }
+      } finally {
+        if (active) setBootLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+      unsubscribe();
     };
-    restoreSession();
   }, []);
 
   useEffect(() => {
+    if (!user) return;
     (async () => {
       try {
         const s = await restGet('settings/general');
@@ -847,9 +909,11 @@ const App: React.FC = () => {
             cng: n(ef.cng) || DEFAULT_FACTORS.cng,
           });
         }
-      } catch {}
+      } catch (error) {
+        console.error('Failed to load portal settings.', error);
+      }
     })();
-  }, []);
+  }, [user]);
 
   const isSuper = user?.role === 'super_admin';
   const isViewer = user?.role === 'viewer';
@@ -953,7 +1017,41 @@ const App: React.FC = () => {
     setProdRows(prev => { const c = [...prev]; (c[mi] as any)[key] = val === '' ? 0 : n(val); return c; });
   };
 
-  const logout = () => { localStorage.removeItem('sp_session'); setUser(null); setBootError(''); setActiveModule('dashboard'); setExpandedModules([]); };
+  const logout = useCallback(async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Sign out failed.', error);
+      setBootError('Sign out failed. Please try again.');
+      return;
+    }
+    localStorage.removeItem('sp_session');
+    setUser(null);
+    setBootError('');
+    setActiveModule('dashboard');
+    setExpandedModules([]);
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let timer: ReturnType<typeof setTimeout>;
+    let lastActivity = 0;
+    const resetIdleTimer = () => {
+      const now = Date.now();
+      if (now - lastActivity < 1000) return;
+      lastActivity = now;
+      clearTimeout(timer);
+      timer = setTimeout(() => { void logout(); }, 30 * 60 * 1000);
+    };
+    const activityEvents: Array<keyof WindowEventMap> = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+    activityEvents.forEach(eventName => window.addEventListener(eventName, resetIdleTimer, { passive: true }));
+    resetIdleTimer();
+    return () => {
+      clearTimeout(timer);
+      activityEvents.forEach(eventName => window.removeEventListener(eventName, resetIdleTimer));
+    };
+  }, [user, logout]);
 
   const toggleExpand = (id: string) => {
     setExpandedModules(prev => 
@@ -1007,6 +1105,7 @@ const App: React.FC = () => {
   // ---------- DASHBOARD: year-wise NCV factors from Settings ----------
   const [ncv, setNcv] = useState<EmissionFactors>(DEFAULT_NCV);
   useEffect(() => {
+    if (!user) return;
     let cancelled = false;
     const pick = (src: any): EmissionFactors | null => {
       if (!src || typeof src !== 'object') return null;
@@ -1028,7 +1127,7 @@ const App: React.FC = () => {
       } catch { if (!cancelled) setNcv(DEFAULT_NCV); }
     })();
     return () => { cancelled = true; };
-  }, [year]);
+  }, [year, user]);
 
   // ---------- DASHBOARD: unit status strip (Higg FEM 4.0, SBTi, GRI) ----------
   const [unitStatus, setUnitStatus] = useState<UnitStatus>(DEFAULT_STATUS);
@@ -1145,10 +1244,23 @@ const App: React.FC = () => {
   const [userLoading, setUserLoading] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [newUserOpen, setNewUserOpen] = useState(false);
+  const [adminTab, setAdminTab] = useState<'users' | 'audit'>('users');
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditLogError, setAuditLogError] = useState('');
   const [newUser, setNewUser] = useState<Omit<UserRecord,'id'>>({
     email: '', password: '', full_name: '', role: 'viewer', status: 'approved', allowedModules: [], allowedUnits: [],
   });
   const [backupLoading, setBackupLoading] = useState(false);
+
+  useEffect(() => {
+    const onAuditError = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail;
+      setAuditLogError(detail || 'An audit log could not be saved.');
+    };
+    window.addEventListener('portal-audit-error', onAuditError);
+    return () => window.removeEventListener('portal-audit-error', onAuditError);
+  }, []);
 
   const loadUsers = async () => {
     setUserLoading(true);
@@ -1158,14 +1270,54 @@ const App: React.FC = () => {
   };
   useEffect(() => { if (activeModule === 'user_management' && isSuper) loadUsers(); }, [activeModule, isSuper]);
 
+  const loadAuditLogs = async () => {
+    setAuditLoading(true);
+    setAuditLogError(current => current.startsWith('Failed to load audit logs:') ? '' : current);
+    try {
+      const logs = await restList('audit_logs');
+      setAuditLogs(logs.sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || ''))));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setAuditLogError(`Failed to load audit logs: ${message}`);
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeModule === 'user_management' && isSuper && adminTab === 'audit') void loadAuditLogs();
+  }, [activeModule, isSuper, adminTab]);
+
   const addNewUser = async () => {
     if (!newUser.email || !newUser.password || !newUser.full_name) { alert('Fill all fields'); return; }
+    let credential: Awaited<ReturnType<typeof createUserWithEmailAndPassword>> | null = null;
     try {
-      await restCreate('users', { ...newUser, email: newUser.email.trim().toLowerCase() });
+      const email = newUser.email.trim().toLowerCase();
+      credential = await createUserWithEmailAndPassword(provisioningAuth, email, newUser.password);
+      const userData = { ...newUser };
+      delete userData.password;
+      await restSet('users', credential.user.uid, { ...userData, email });
       setNewUserOpen(false);
       setNewUser({ email: '', password: '', full_name: '', role: 'viewer', status: 'approved', allowedModules: [], allowedUnits: [] });
-      loadUsers();
-    } catch (e: any) { alert('Failed: ' + e.message); }
+      await loadUsers();
+    } catch (error) {
+      if (credential) {
+        try {
+          await deleteUser(credential.user);
+        } catch (cleanupError) {
+          console.error('Could not remove the newly created Auth account after profile creation failed.', cleanupError);
+        }
+      }
+      alert('Failed to create user: ' + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      if (provisioningAuth.currentUser) {
+        try {
+          await signOut(provisioningAuth);
+        } catch (error) {
+          console.error('Could not sign out the user-provisioning Auth instance.', error);
+        }
+      }
+    }
   };
   const saveUserEdit = async () => {
     if (!editingUser || !editingUser.id) return;
@@ -1535,6 +1687,17 @@ const App: React.FC = () => {
           )}
 
                    {activeModule === 'user_management' && isSuper && (
+                     <div className="mb-3 flex gap-2 border-b border-gray-200">
+                       <button onClick={() => setAdminTab('users')} className={`px-3 py-2 text-xs font-semibold border-b-2 ${adminTab === 'users' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                         Users
+                       </button>
+                       <button onClick={() => setAdminTab('audit')} className={`px-3 py-2 text-xs font-semibold border-b-2 ${adminTab === 'audit' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                         Audit Logs
+                       </button>
+                     </div>
+                   )}
+
+                   {activeModule === 'user_management' && isSuper && adminTab === 'users' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <h2 className="text-sm font-bold text-gray-800">User Management</h2>
@@ -1785,6 +1948,49 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {activeModule === 'user_management' && isSuper && adminTab === 'audit' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <div>
+              <h2 className="text-sm font-bold text-gray-800">Audit Logs</h2>
+              <p className="text-xs text-gray-500">{auditLogs.length} event(s)</p>
+            </div>
+            <button onClick={() => void loadAuditLogs()} disabled={auditLoading} className="px-3 py-1.5 text-xs font-semibold border border-gray-200 rounded-lg disabled:opacity-60">
+              {auditLoading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+          {auditLogError && <p role="alert" className="px-4 py-3 text-xs text-red-700 bg-red-50">{auditLogError}</p>}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-emerald-50/60 text-emerald-800">
+                  <th className="px-3 py-2 text-left font-semibold">Timestamp</th>
+                  <th className="px-3 py-2 text-left font-semibold">User Email</th>
+                  <th className="px-3 py-2 text-left font-semibold">Role</th>
+                  <th className="px-3 py-2 text-left font-semibold">Unit</th>
+                  <th className="px-3 py-2 text-left font-semibold">Module</th>
+                  <th className="px-3 py-2 text-left font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditLoading && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-500">Loading audit logs...</td></tr>}
+                {!auditLoading && auditLogs.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-500">No audit logs found.</td></tr>}
+                {!auditLoading && auditLogs.map((entry, index) => (
+                  <tr key={entry.id || `${entry.timestamp}-${index}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                    <td className="px-3 py-2 whitespace-nowrap">{entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '—'}</td>
+                    <td className="px-3 py-2">{entry.userEmail || '—'}</td>
+                    <td className="px-3 py-2">{entry.role || '—'}</td>
+                    <td className="px-3 py-2">{entry.unit || '—'}</td>
+                    <td className="px-3 py-2">{entry.module || '—'}</td>
+                    <td className="px-3 py-2">{entry.action || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* NEW USER MODAL */}
       {newUserOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
@@ -1804,7 +2010,7 @@ const App: React.FC = () => {
               </div>
               <div>
                 <label className="block font-semibold text-gray-600 mb-1">Password</label>
-                <input value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg" />
+                <input type="password" value={newUser.password || ''} onChange={e => setNewUser({ ...newUser, password: e.target.value })} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg" />
               </div>
               <div>
                 <label className="block font-semibold text-gray-600 mb-1">Role</label>
@@ -1880,51 +2086,98 @@ const ApprovalStatusScreen: React.FC<{ status: UserStatus; onLogout: () => void 
 );
 
 const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void; initialError?: string }> = ({ onLogin, initialError }) => {
-  const [mode, setMode] = useState<'signin'|'signup'>('signin');
+  const [mode, setMode] = useState<'signin'|'signup'|'reset'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initialError || '');
+  const [notice, setNotice] = useState('');
 
   const handleSignin = async () => {
     setError('');
-    if (!email || !password) { setError('Email and password are required.'); return; }
+    setNotice('');
+    if (!email.trim() || !password) { setError('Email and password are required.'); return; }
     setLoading(true);
     try {
-      const matches = await restQuery('users', [
-        { field: 'email', value: email.trim().toLowerCase() },
-        { field: 'password', value: password },
-      ]);
-      if (matches.length === 0) { setError('Invalid credentials.'); setLoading(false); return; }
-      const u = normalizeUser(matches[0]);
-      if (u.status === 'rejected') { setError('Your account has been rejected. Please contact an administrator.'); return; }
-      if (u.status === 'approved') localStorage.setItem('sp_session', JSON.stringify(u));
+      const normalizedEmail = email.trim().toLowerCase();
+      const credential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      const matches = await restQuery('users', [{ field: 'email', value: normalizedEmail }]);
+      const profile = matches.find((match: any) => match.id === credential.user.uid) || matches[0];
+      if (!profile) {
+        await signOut(auth);
+        setError('Your account profile could not be found. Please contact an administrator.');
+        return;
+      }
+      const u = normalizeUser(profile);
+      u.id = profile.id || credential.user.uid;
+      if (u.status === 'rejected') {
+        await signOut(auth);
+        setError('Your account has been rejected. Please contact an administrator.');
+        return;
+      }
       onLogin(u);
-    } catch (e: any) { setError(e.message || 'Sign in failed.'); }
+    } catch (e: any) {
+      const message = e?.code === 'auth/invalid-credential' || e?.code === 'auth/user-not-found' || e?.code === 'auth/wrong-password'
+        ? 'Invalid email or password.'
+        : e?.code === 'auth/network-request-failed'
+          ? 'Network offline. Check your connection and try again.'
+          : e?.message || 'Sign in failed.';
+      setError(message);
+    }
     finally { setLoading(false); }
   };
 
   const handleSignup = async () => {
     setError('');
-    if (!email || !password || !fullName) { setError('All fields are required.'); return; }
+    setNotice('');
+    if (!email.trim() || !password || !fullName.trim()) { setError('All fields are required.'); return; }
     setLoading(true);
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
       const newUser: Omit<UserRecord,'id'> = {
-        email: email.trim().toLowerCase(),
-        password,
+        email: normalizedEmail,
         full_name: fullName.trim(),
         role: 'viewer',
         status: 'pending',
         allowedModules: [],
         allowedUnits: [],
       };
-      const newId = await restCreate('users', newUser);
-      const u: UserRecord = { id: newId, ...newUser };
+      try {
+        await restSet('users', credential.user.uid, newUser);
+      } catch (saveError) {
+        try {
+          await deleteUser(credential.user);
+        } catch (cleanupError) {
+          throw new Error(`Account profile could not be saved, and the temporary Auth account could not be removed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
+        }
+        throw saveError;
+      }
+      const u: UserRecord = { id: credential.user.uid, ...newUser };
       onLogin(u);
     } catch (e: any) { setError(e.message || 'Sign up failed.'); }
     finally { setLoading(false); }
+  };
+
+  const handlePasswordReset = async () => {
+    setError('');
+    setNotice('');
+    if (!email.trim()) { setError('Enter your account email first.'); return; }
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+      setNotice('If an account exists for this email, a password reset link has been sent.');
+    } catch (e: any) {
+      if (e?.code === 'auth/user-not-found') {
+        setNotice('If an account exists for this email, a password reset link has been sent.');
+      } else {
+        setError(e?.code === 'auth/network-request-failed' ? 'Network offline. Check your connection and try again.' : e.message || 'Password reset failed.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -1939,13 +2192,16 @@ const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void; initialError?: s
           <div className="bg-white rounded-2xl shadow-xl shadow-emerald-100/60 border border-emerald-100 p-8">
             <div className="flex flex-col items-center mb-6">
               <h1 className="text-2xl font-bold text-gray-800">Sustainability Portal</h1>
-              <p className="text-sm text-emerald-600 mt-1">{mode==='signin' ? 'Sign in to your account' : 'Create a new account'}</p>
+              <p className="text-sm text-emerald-600 mt-1">
+                {mode === 'signin' ? 'Sign in to your account' : mode === 'signup' ? 'Create a new account' : 'Reset your password'}
+              </p>
             </div>
             {error && (
               <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2">
                 <AlertCircle size={16} className="mt-0.5 shrink-0" /> <span>{error}</span>
               </div>
             )}
+            {notice && <div className="mb-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm">{notice}</div>}
             <div className="space-y-4">
               {mode === 'signup' && (
                 <div>
@@ -1959,7 +2215,7 @@ const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void; initialError?: s
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com"
                   className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
               </div>
-              <div>
+              {mode !== 'reset' && <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Password</label>
                 <div className="relative">
                   <input type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
@@ -1968,22 +2224,29 @@ const LoginScreen: React.FC<{ onLogin: (u: UserRecord) => void; initialError?: s
                     {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-              </div>
-              <button onClick={mode==='signin' ? handleSignin : handleSignup} disabled={loading}
+              </div>}
+              <button onClick={mode === 'signin' ? handleSignin : mode === 'signup' ? handleSignup : handlePasswordReset} disabled={loading}
                 className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold text-sm shadow-md shadow-emerald-200">
-                {loading ? 'Please wait...' : mode==='signin' ? 'Sign In' : 'Create Account'}
+                {loading ? 'Please wait...' : mode === 'signin' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Send Reset Link'}
               </button>
             </div>
             <div className="mt-5 text-center text-sm text-gray-500">
-              {mode==='signin' ? (
-                <>Don't have an account? <button onClick={() => { setMode('signup'); setError(''); }} className="text-emerald-600 font-semibold hover:underline">Sign Up</button></>
-              ) : (
-                <>Already have an account? <button onClick={() => { setMode('signin'); setError(''); }} className="text-emerald-600 font-semibold hover:underline">Sign In</button></>
+              {mode === 'signin' && (
+                <div className="space-y-2">
+                  <div>Don't have an account? <button onClick={() => { setMode('signup'); setError(''); setNotice(''); }} className="text-emerald-600 font-semibold hover:underline">Sign Up</button></div>
+                  <button onClick={() => { setMode('reset'); setError(''); setNotice(''); }} className="text-emerald-600 font-semibold hover:underline">Forgot Password?</button>
+                </div>
+              )}
+              {mode === 'signup' && (
+                <>Already have an account? <button onClick={() => { setMode('signin'); setError(''); setNotice(''); }} className="text-emerald-600 font-semibold hover:underline">Sign In</button></>
+              )}
+              {mode === 'reset' && (
+                <button onClick={() => { setMode('signin'); setError(''); setNotice(''); }} className="text-emerald-600 font-semibold hover:underline">Back to Sign In</button>
               )}
             </div>
-            <div className="mt-4 p-3 rounded-lg bg-emerald-50/60 border border-emerald-100 text-[11px] text-emerald-700">
+            {mode === 'signup' && <div className="mt-4 p-3 rounded-lg bg-emerald-50/60 border border-emerald-100 text-[11px] text-emerald-700">
               <Shield size={12} className="inline mr-1" />New accounts require administrator approval before access.
-            </div>
+            </div>}
           </div>
         </div>
       </div>
